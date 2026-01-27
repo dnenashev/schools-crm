@@ -97,6 +97,7 @@ export const createUnknownSchool = (): School => ({
   leadsCount: 0,
   campusVisitsCount: 0,
   notes: '',
+  callsLink: '',
   activities: []
 })
 
@@ -156,6 +157,7 @@ export interface School {
   callbackDate: string | null     // Дата перезвона
   notes: string                   // Заметки
   amoLink: string                 // Ссылка на АМО CRM
+  callsLink?: string              // Ссылка на звонки (Meet/Zoom), редактируется менеджерами
 
   // История активностей
   activities: Activity[]

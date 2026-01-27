@@ -433,9 +433,27 @@ app.get('/api/schools/:id', async (req, res) => {
   }
 });
 
-// PUT /api/schools/:id — обновить школу (только админ)
-app.put('/api/schools/:id', requireAuth, requireAdmin, async (req, res) => {
+// PUT /api/schools/:id — обновить школу
+// Админ: может обновлять любые поля
+// Менеджер: может обновлять только callsLink (ссылка на звонки)
+app.put('/api/schools/:id', requireAuth, async (req, res) => {
   try {
+    const isAdminUser = req.user?.role === 'admin';
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const keys = Object.keys(body);
+
+    if (!isAdminUser) {
+      const ALLOWED_MANAGER_FIELDS = new Set(['callsLink']);
+      const forbidden = keys.filter(k => !ALLOWED_MANAGER_FIELDS.has(k));
+      if (forbidden.length > 0) {
+        return res.status(403).json({ error: 'Доступно только администраторам' });
+      }
+      // normalize type
+      if (typeof body.callsLink !== 'string') {
+        body.callsLink = '';
+      }
+    }
+
     const schools = await readSchools();
     const index = schools.findIndex(s => s.id === req.params.id);
 
@@ -444,7 +462,7 @@ app.put('/api/schools/:id', requireAuth, requireAdmin, async (req, res) => {
     }
 
     // Обновляем только переданные поля
-    schools[index] = { ...schools[index], ...req.body };
+    schools[index] = { ...schools[index], ...body };
     await saveSchools(schools, req.user?.id);
 
     res.json({ success: true, school: schools[index] });

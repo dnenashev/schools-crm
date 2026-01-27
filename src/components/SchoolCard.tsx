@@ -34,9 +34,40 @@ const SchoolCard = ({ school, onClose, onUpdate }: SchoolCardProps) => {
   const [editValue, setEditValue] = useState('')
   const [notes, setNotes] = useState(school.notes || '')
   const [callbackDate, setCallbackDate] = useState(school.callbackDate || '')
+  const [callsLink, setCallsLink] = useState(school.callsLink || '')
+  const [savingCallsLink, setSavingCallsLink] = useState(false)
   const [saving, setSaving] = useState(false)
   const API_URL = useApiUrl()
   const { isAdmin } = useAuth()
+
+  const normalizeUrl = (raw: string): string => {
+    const v = raw.trim()
+    if (!v) return ''
+    if (/^https?:\/\//i.test(v)) return v
+    return `https://${v}`
+  }
+
+  const saveCallsLink = async () => {
+    setSavingCallsLink(true)
+    try {
+      const response = await authenticatedFetch(`${API_URL}/schools/${school.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ callsLink: callsLink.trim() })
+      })
+
+      if (response.ok) {
+        onUpdate()
+      } else {
+        const data = await response.json()
+        alert(data.error || 'Ошибка сохранения')
+      }
+    } catch (error) {
+      console.error('Error saving calls link:', error)
+      alert('Ошибка сохранения')
+    } finally {
+      setSavingCallsLink(false)
+    }
+  }
 
   // Сохранение изменения статуса (только для админов)
   const saveStatus = async (field: string, value: string | null) => {
@@ -219,6 +250,52 @@ const SchoolCard = ({ school, onClose, onUpdate }: SchoolCardProps) => {
               {school.amoLink && (
                 <a href={school.amoLink} target="_blank" rel="noopener noreferrer"
                    className="text-green-600 hover:underline text-sm">АМО CRM</a>
+              )}
+              {school.callsLink && (
+                <a
+                  href={normalizeUrl(school.callsLink)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-orange-700 hover:underline text-sm"
+                >
+                  Звонки
+                </a>
+              )}
+            </div>
+
+            {/* Ссылка на звонки (редактируется менеджерами) */}
+            <div className="mt-4">
+              <label className="block text-sm text-gray-600 mb-1">
+                Ссылка на звонки (Meet/Zoom)
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={callsLink}
+                  onChange={(e) => setCallsLink(e.target.value)}
+                  placeholder="https://meet.google.com/..."
+                  className="flex-1 px-3 py-2 border rounded-lg text-sm"
+                />
+                <button
+                  onClick={saveCallsLink}
+                  disabled={savingCallsLink}
+                  className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 text-sm disabled:opacity-50"
+                  title="Сохранить ссылку"
+                >
+                  {savingCallsLink ? '...' : 'Сохранить'}
+                </button>
+              </div>
+              {callsLink.trim() && (
+                <div className="mt-2">
+                  <a
+                    href={normalizeUrl(callsLink)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-orange-700 hover:underline"
+                  >
+                    Открыть ссылку →
+                  </a>
+                </div>
               )}
             </div>
           </div>
