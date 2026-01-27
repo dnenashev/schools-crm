@@ -30,7 +30,7 @@ const SchoolsPage = () => {
   const [schools, setSchools] = useState<School[]>([]) // храним ВСЕ (включая неизвестные) — фильтруем только на отображении
   const [loading, setLoading] = useState(true)
   const API_URL = useApiUrl()
-  
+
   // Получаем параметры из URL
   const metric = searchParams.get('metric') as MetricKey | null
   const from = searchParams.get('from')
@@ -42,7 +42,8 @@ const SchoolsPage = () => {
       try {
         const res = await authenticatedFetch(`${API_URL}/schools`)
         if (res.ok) {
-          const data = await res.json()
+          const raw: unknown = await res.json()
+          const data: School[] = Array.isArray(raw) ? (raw as School[]) : []
           // Дедупликация по ID
           const uniqueData = Array.from(
             new Map(data.map((s: School) => [s.id, s])).values()
@@ -98,6 +99,7 @@ const SchoolsPage = () => {
 
     // Для накопительных метрик (школы в работе)
     if (metricConfig.cumulative) {
+      if (!metricConfig.dateField) return collapseUnknownSchools([])
       const dateField = metricConfig.dateField as keyof School
       const base = schools.filter(school => {
         const value = school[dateField] as string | null
@@ -122,6 +124,7 @@ const SchoolsPage = () => {
     }
 
     // Для обычных метрик - по дате
+    if (!metricConfig.dateField) return collapseUnknownSchools([])
     const dateField = metricConfig.dateField as keyof School
     const result = schools.filter(school => {
       const value = school[dateField] as string | null
@@ -163,7 +166,7 @@ const SchoolsPage = () => {
 
     // Проверяем, это один день или период
     const isSingleDay = from === to
-    
+
     let periodStr = ''
     if (isSingleDay) {
       periodStr = formatDate(from)
@@ -174,7 +177,7 @@ const SchoolsPage = () => {
     return {
       title: metricConfig.label,
       subtitle: periodStr,
-      filterDescription: metricConfig.cumulative 
+      filterDescription: metricConfig.cumulative
         ? `Школы где статус "${metricConfig.label}" установлен до ${formatDate(to)}`
         : `Школы где статус "${metricConfig.label}" установлен в период`
     }
@@ -185,7 +188,8 @@ const SchoolsPage = () => {
     try {
       const res = await authenticatedFetch(`${API_URL}/schools`)
       if (res.ok) {
-        const data = await res.json()
+        const raw: unknown = await res.json()
+        const data: School[] = Array.isArray(raw) ? (raw as School[]) : []
         // Дедупликация по ID
         const uniqueData = Array.from(
           new Map(data.map((s: School) => [s.id, s])).values()
@@ -210,8 +214,8 @@ const SchoolsPage = () => {
       <div className="container mx-auto px-4 py-8">
         {/* Навигация */}
         <div className="mb-6 flex items-center gap-4">
-          <Link 
-            to="/" 
+          <Link
+            to="/"
             className="inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors"
           >
             <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -241,8 +245,8 @@ const SchoolsPage = () => {
                     Решить неизвестность
                   </Link>
                 )}
-                <Link 
-                  to="/schools" 
+                <Link
+                  to="/schools"
                   className="text-sm text-blue-600 hover:text-blue-800 underline"
                 >
                   Сбросить фильтр
@@ -253,7 +257,7 @@ const SchoolsPage = () => {
         )}
 
         {/* Таблица школ */}
-        <SchoolsTable 
+        <SchoolsTable
           schools={filteredSchools}
           title={title}
           subtitle={subtitle}

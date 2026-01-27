@@ -27,7 +27,7 @@ const NumericMetricsDistribution = ({
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   // Активные метрики (с ненулевыми значениями)
-  const activeMetrics = useMemo(() => 
+  const activeMetrics = useMemo(() =>
     NUMERIC_METRICS.filter(m => (metricsCount[m.key] || 0) > 0),
     [metricsCount]
   )
@@ -81,21 +81,21 @@ const NumericMetricsDistribution = ({
     }
 
     let filtered = [unknownSchool, ...filteredBase]
-    
+
     if (search) {
       const searchLower = search.toLowerCase()
-      filtered = [unknownSchool, ...filteredBase].filter(s => 
+      filtered = [unknownSchool, ...filteredBase].filter(s =>
         s.id === UNKNOWN_SCHOOL_ID ||
         s.name.toLowerCase().includes(searchLower) ||
         s.city.toLowerCase().includes(searchLower) ||
         s.district.toLowerCase().includes(searchLower)
       )
     }
-    
+
     return [...filtered].sort((a, b) => {
       if (a.id === UNKNOWN_SCHOOL_ID) return -1
       if (b.id === UNKNOWN_SCHOOL_ID) return 1
-      
+
       const aFav = favoriteSchoolIds.has(a.id)
       const bFav = favoriteSchoolIds.has(b.id)
       if (aFav && !bFav) return -1
@@ -134,7 +134,7 @@ const NumericMetricsDistribution = ({
   }, [activeMetrics, metricsCount, numericMetricsBySchool])
 
   // Все ли распределено
-  const allDistributed = useMemo(() => 
+  const allDistributed = useMemo(() =>
     Object.values(metricStats).every(s => s.remaining === 0),
     [metricStats]
   )
@@ -143,13 +143,13 @@ const NumericMetricsDistribution = ({
   const handleKeyDown = (e: React.KeyboardEvent, schoolId: string, metricKey: string) => {
     if (e.key === 'Tab' || e.key === 'Enter') {
       e.preventDefault()
-      
+
       const schoolIndex = filteredSchools.findIndex(s => s.id === schoolId)
       const metricIndex = activeMetrics.findIndex(m => m.key === metricKey)
-      
+
       let nextSchoolIndex = schoolIndex
       let nextMetricIndex = metricIndex
-      
+
       if (e.shiftKey) {
         // Shift+Tab: назад
         nextMetricIndex--
@@ -165,7 +165,7 @@ const NumericMetricsDistribution = ({
           nextSchoolIndex++
         }
       }
-      
+
       if (nextSchoolIndex >= 0 && nextSchoolIndex < filteredSchools.length) {
         const nextSchool = filteredSchools[nextSchoolIndex]
         const nextMetric = activeMetrics[nextMetricIndex]
@@ -202,13 +202,13 @@ const NumericMetricsDistribution = ({
     if (favoriteSchoolIds.size === 0) return
     const favArray = Array.from(favoriteSchoolIds)
     const newMetrics = { ...numericMetricsBySchool }
-    
+
     activeMetrics.forEach(m => {
       const remaining = metricStats[m.key].remaining
       if (remaining > 0) {
         const perSchool = Math.floor(remaining / favArray.length)
         const extra = remaining % favArray.length
-        
+
         if (!newMetrics[m.key]) newMetrics[m.key] = {}
         favArray.forEach((schoolId, idx) => {
           const current = newMetrics[m.key][schoolId] || 0
@@ -243,7 +243,7 @@ const NumericMetricsDistribution = ({
         <p className="text-xs text-gray-400 mt-2">
           💡 Используйте Tab для перехода между ячейками, Enter — следующая строка
         </p>
-        
+
         {allDistributed && (
           <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 flex items-center gap-2">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -267,7 +267,7 @@ const NumericMetricsDistribution = ({
             </button>
           )}
         </div>
-        
+
         {/* Поиск */}
         <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
           <input
@@ -323,7 +323,7 @@ const NumericMetricsDistribution = ({
                   Всего
                 </th>
                 <th className="px-2 py-3 text-center font-medium text-gray-700 w-12">
-                  
+
                 </th>
               </tr>
             </thead>
@@ -333,10 +333,10 @@ const NumericMetricsDistribution = ({
                 const isFav = favoriteSchoolIds.has(school.id)
                 const schoolTotal = getSchoolTotal(school.id)
                 const hasValues = schoolTotal > 0
-                
+
                 return (
-                  <tr 
-                    key={school.id} 
+                  <tr
+                    key={school.id}
                     className={`
                       ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
                       ${isUnknown ? 'bg-orange-50' : isFav && !hasValues ? 'bg-purple-50' : ''}
@@ -364,11 +364,11 @@ const NumericMetricsDistribution = ({
                         </div>
                       </div>
                     </td>
-                    
-                    {activeMetrics.map((m, colIndex) => {
+
+                    {activeMetrics.map((m) => {
                       const value = numericMetricsBySchool[m.key]?.[school.id] || 0
                       const refKey = `${school.id}-${m.key}`
-                      
+
                       return (
                         <td key={m.key} className="px-1 py-1">
                           <input
@@ -381,8 +381,8 @@ const NumericMetricsDistribution = ({
                             onKeyDown={(e) => handleKeyDown(e, school.id, m.key)}
                             onFocus={(e) => e.target.select()}
                             className={`w-full px-2 py-1.5 text-center border rounded font-medium outline-none transition-colors
-                              ${value > 0 
-                                ? 'border-green-300 bg-green-50 text-green-800' 
+                              ${value > 0
+                                ? 'border-green-300 bg-green-50 text-green-800'
                                 : 'border-gray-200 text-gray-600 hover:border-blue-300'
                               }
                               focus:ring-2 focus:ring-blue-500 focus:border-blue-500
@@ -391,11 +391,11 @@ const NumericMetricsDistribution = ({
                         </td>
                       )
                     })}
-                    
+
                     <td className="px-3 py-2 text-center font-bold bg-gray-100">
                       {schoolTotal || '-'}
                     </td>
-                    
+
                     <td className="px-2 py-2">
                       {!allDistributed && (
                         <button
@@ -422,11 +422,11 @@ const NumericMetricsDistribution = ({
                   const stats = metricStats[m.key]
                   const isComplete = stats.remaining === 0
                   const isOver = stats.remaining < 0
-                  
+
                   return (
                     <td key={m.key} className={`px-2 py-2 text-center ${
-                      isComplete ? 'text-green-700 bg-green-100' : 
-                      isOver ? 'text-red-700 bg-red-100' : 
+                      isComplete ? 'text-green-700 bg-green-100' :
+                      isOver ? 'text-red-700 bg-red-100' :
                       'text-amber-700 bg-amber-100'
                     }`}>
                       {stats.distributed} / {stats.total}
@@ -465,7 +465,7 @@ const NumericMetricsDistribution = ({
             </tfoot>
           </table>
         </div>
-        
+
         {filteredSchools.length > 50 && (
           <div className="px-4 py-2 text-center text-sm text-gray-500 bg-gray-50 border-t">
             Показаны первые 50 школ. Используйте поиск для уточнения.

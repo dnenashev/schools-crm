@@ -111,7 +111,7 @@ const ResolveUnknownMode = () => {
   const presets = useMemo(() => {
     const today = new Date()
     const todayStr = formatMskYmd(today)
-    
+
     const yesterday = new Date(today)
     yesterday.setDate(yesterday.getDate() - 1)
     const yesterdayStr = formatMskYmd(yesterday)
@@ -264,7 +264,7 @@ const ResolveUnknownMode = () => {
   // Фильтрованный список школ (без __unknown_school__)
   const filteredSchools = useMemo(() => {
     let filtered = schools.filter(s => s.id !== UNKNOWN_SCHOOL_ID)
-    
+
     if (cityFilter !== 'all') {
       filtered = filtered.filter(s => (s.city || '').trim() === cityFilter)
     }
@@ -317,13 +317,13 @@ const ResolveUnknownMode = () => {
   const updateResolution = (index: number, field: keyof Resolution, value: string) => {
     const newResolutions = [...resolutions]
     newResolutions[index] = { ...newResolutions[index], [field]: value }
-    
+
     // Если выбрали школу, обновляем имя
     if (field === 'schoolId') {
       const school = schools.find(s => s.id === value)
       newResolutions[index].schoolName = school?.name || ''
     }
-    
+
     setResolutions(newResolutions)
   }
 
@@ -374,15 +374,15 @@ const ResolveUnknownMode = () => {
       if (res.ok) {
         const data = await res.json()
         setSuccessMessage(`Раскрыто ${data.resolvedCount} школ из ${selectedItem.count}`)
-        
+
         // Перезагружаем данные
         await loadSchools()
-        
+
         // Через 2 секунды возвращаемся к списку
         setTimeout(() => {
           setSuccessMessage(null)
           setSelectedItem(null)
-          
+
           // Обновляем список неизвестных
           if (period) {
             const items = extractUnknownItems(period.from, period.to)
@@ -407,10 +407,6 @@ const ResolveUnknownMode = () => {
     return formatMsk(dateStr, { day: 'numeric', month: 'long', year: 'numeric' })
   }
 
-  const formatDateShort = (dateStr: string) => {
-    return formatMsk(dateStr, { day: '2-digit', month: '2-digit' })
-  }
-
   if (loading && schools.length === 0) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -433,7 +429,7 @@ const ResolveUnknownMode = () => {
       {step === 'period' && (
         <div className="bg-white rounded-lg shadow-lg p-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Выберите период</h3>
-          
+
           {/* Пресеты */}
           <div className="flex flex-wrap gap-2 mb-6">
             {presets.map((preset, index) => (
@@ -494,7 +490,7 @@ const ResolveUnknownMode = () => {
               <div>
                 <span className="text-sm text-gray-500">Период: </span>
                 <span className="font-medium text-gray-800">
-                  {period.from === period.to 
+                  {period.from === period.to
                     ? formatDate(period.from)
                     : `${formatDate(period.from)} — ${formatDate(period.to)}`
                   }
@@ -608,8 +604,8 @@ const ResolveUnknownMode = () => {
               <button
                 onClick={() => setMode('simple')}
                 className={`px-4 py-2 text-sm rounded-md transition-colors ${
-                  mode === 'simple' 
-                    ? 'bg-white text-gray-800 shadow' 
+                  mode === 'simple'
+                    ? 'bg-white text-gray-800 shadow'
                     : 'text-gray-600 hover:text-gray-800'
                 }`}
               >
@@ -618,8 +614,8 @@ const ResolveUnknownMode = () => {
               <button
                 onClick={() => setMode('detailed')}
                 className={`px-4 py-2 text-sm rounded-md transition-colors ${
-                  mode === 'detailed' 
-                    ? 'bg-white text-gray-800 shadow' 
+                  mode === 'detailed'
+                    ? 'bg-white text-gray-800 shadow'
                     : 'text-gray-600 hover:text-gray-800'
                 }`}
               >
@@ -647,7 +643,7 @@ const ResolveUnknownMode = () => {
                     <span className="text-sm text-red-600">Выбрано больше чем нужно</span>
                   )}
                 </div>
-                
+
                 <button
                   onClick={() => setSelectedSchoolIds(new Set())}
                   className="text-sm text-gray-500 hover:text-gray-700"

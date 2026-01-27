@@ -112,7 +112,7 @@ export interface School {
   uchiLink: string                // Ссылка на страницу Учи.ру
   travelTime: string              // Время_до_Марьина_Роща
   tags: string[]                  // Теги (например: "неполная инфа")
-  
+
   // Статусы с датами (для метрик дашборда)
   inWorkDate: string | null              // Взято в работу (Новые школы)
   contactDate: string | null             // Контакт состоялся
@@ -126,43 +126,70 @@ export interface School {
   qualifiedLeadDate: string | null       // Квалифицированный лид
   arrivedToCampusDate: string | null     // Доехали до кампуса
   preliminaryMeetingDate: string | null  // Предвары
-  
+
   // Детальный трекинг звонков
   callStatus: CallStatus | null          // Статус звонка
   callDate: string | null                // Дата последнего звонка
   callAttempts: number                   // Количество попыток дозвона
-  
+
   // Детальный трекинг диалога
   dialogueStatus: DialogueStatus | null  // Статус диалога
   dialogueDate: string | null            // Дата диалога
   dialogueNotes: string                  // Примечания к диалогу
-  
+
   // Детальный трекинг встреч
   meetingStatus: MeetingStatus | null    // Статус встречи
   meetingDate: string | null             // Дата встречи
   meetingNotes: string                   // Примечания к встрече
-  
+
   // Детальный трекинг мероприятий
   eventStatus: EventStatus | null        // Статус мероприятия
   eventDate: string | null               // Дата мероприятия
   eventNotes: string                     // Примечания к мероприятию
-  
+
   // Числовые метрики
   classesCount: number                   // Кол-во классов
   leadsCount: number                     // Кол-во лидов
   campusVisitsCount: number              // Кол-во приездов на кампус
-  
+
   // Дополнительные поля для работы
   callbackDate: string | null     // Дата перезвона
   notes: string                   // Заметки
   amoLink: string                 // Ссылка на АМО CRM
-  
+
   // История активностей
   activities: Activity[]
 }
 
+export const METRIC_KEYS = [
+  'newSchools',
+  'schoolsInWork',
+  'contactMade',
+  'meetingScheduled',
+  'meetingHeld',
+  'eventScheduled',
+  'eventHeld',
+  'excursionPlanned',
+  'parentContacts',
+  'loadedToCRM',
+  'qualifiedLeads',
+  'arrivedToCampus',
+  'preliminaryMeetings',
+] as const
+
+export type MetricKey = typeof METRIC_KEYS[number]
+
+export type MetricConfigItem = {
+  key: MetricKey
+  label: string
+  dateField?: keyof School
+  activityBased?: true
+  cumulative?: true
+  cumulativeFrom?: MetricKey
+}
+
 // Конфигурация метрик для дашборда
-export const METRICS_CONFIG = [
+export const METRICS_CONFIG: MetricConfigItem[] = [
   // Порядок и названия метрик (дашборд/карточка) — как в ТЗ
   { key: 'newSchools', label: 'Новые школы', dateField: 'inWorkDate' },
   // Накопительно: сколько школ было взято в работу на дату (и раньше)
@@ -179,9 +206,7 @@ export const METRICS_CONFIG = [
   { key: 'qualifiedLeads', label: 'Квал заявки', activityBased: true },
   { key: 'arrivedToCampus', label: 'Доехавшие до кампуса', activityBased: true },
   { key: 'preliminaryMeetings', label: 'Предвары', activityBased: true },
-] as const
-
-export type MetricKey = typeof METRICS_CONFIG[number]['key']
+]
 
 // Типы для фильтрации
 export type PeriodType = 'day' | 'week' | 'month'

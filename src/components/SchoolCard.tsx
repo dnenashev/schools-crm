@@ -44,14 +44,14 @@ const SchoolCard = ({ school, onClose, onUpdate }: SchoolCardProps) => {
       alert('Редактирование доступно только администраторам')
       return
     }
-    
+
     setSaving(true)
     try {
       const response = await authenticatedFetch(`${API_URL}/schools/${school.id}`, {
         method: 'PUT',
         body: JSON.stringify({ [field]: value || null })
       })
-      
+
       if (response.ok) {
         onUpdate()
       } else {
@@ -73,14 +73,14 @@ const SchoolCard = ({ school, onClose, onUpdate }: SchoolCardProps) => {
       alert('Редактирование доступно только администраторам')
       return
     }
-    
+
     setSaving(true)
     try {
       const response = await authenticatedFetch(`${API_URL}/schools/${school.id}`, {
         method: 'PUT',
         body: JSON.stringify({ notes, callbackDate: callbackDate || null })
       })
-      
+
       if (response.ok) {
         onUpdate()
       } else {
@@ -156,11 +156,11 @@ const SchoolCard = ({ school, onClose, onUpdate }: SchoolCardProps) => {
   }
 
   return (
-    <div 
+    <div
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
       onClick={onClose}
     >
-      <div 
+      <div
         className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
@@ -205,11 +205,11 @@ const SchoolCard = ({ school, onClose, onUpdate }: SchoolCardProps) => {
                 </span>
               </div>
             </div>
-            
+
             {/* Ссылки */}
             <div className="flex gap-3 mt-3">
               {school.uchiLink && (
-                <a href={school.uchiLink} target="_blank" rel="noopener noreferrer" 
+                <a href={school.uchiLink} target="_blank" rel="noopener noreferrer"
                    className="text-purple-600 hover:underline text-sm">Учи.ру</a>
               )}
               {school.website && (
@@ -230,11 +230,11 @@ const SchoolCard = ({ school, onClose, onUpdate }: SchoolCardProps) => {
               {STAGE_FIELDS.map(({ key, label }) => {
                 const value = school[key as keyof School] as string | null
                 const isEditing = editingField === key
-                
+
                 return (
                   <div key={key} className="flex items-center justify-between py-2 border-b border-gray-100">
                     <span className="text-sm text-gray-700">{label}</span>
-                    
+
                     {isEditing && isAdmin ? (
                       <div className="flex items-center gap-2">
                         <input
@@ -401,7 +401,12 @@ const SchoolCard = ({ school, onClose, onUpdate }: SchoolCardProps) => {
                     )}
                     {(activity.parentContacts || activity.metrics || activity.classesContacted?.length) && (
                       <div className="text-xs text-gray-500 mt-1">
-                        {activity.parentContacts > 0 && <span className="mr-3">Родители: {activity.parentContacts}</span>}
+                        {(() => {
+                          const parentContacts = activity.parentContacts ?? 0
+                          return parentContacts > 0 ? (
+                            <span className="mr-3">Родители: {parentContacts}</span>
+                          ) : null
+                        })()}
                         {activity.metrics && Object.keys(activity.metrics).length > 0 && (
                           <span className="mr-3">
                             Метрики: {Object.entries(activity.metrics)
@@ -410,9 +415,10 @@ const SchoolCard = ({ school, onClose, onUpdate }: SchoolCardProps) => {
                               .join(', ')}
                           </span>
                         )}
-                        {activity.classesContacted?.length > 0 && (
-                          <span>Классы: {activity.classesContacted.join(', ')}</span>
-                        )}
+                        {(() => {
+                          const classes = activity.classesContacted ?? []
+                          return classes.length > 0 ? <span>Классы: {classes.join(', ')}</span> : null
+                        })()}
                       </div>
                     )}
                   </div>

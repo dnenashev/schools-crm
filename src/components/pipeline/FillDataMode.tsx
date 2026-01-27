@@ -18,12 +18,12 @@ const FillDataMode = () => {
   const [metricsCount, setMetricsCount] = useState<MetricsCount>({})
   const [selections, setSelections] = useState<SchoolSelections>({})
   const [numericMetricsBySchool, setNumericMetricsBySchool] = useState<NumericMetricsBySchool>({})
-  
+
   const [schools, setSchools] = useState<School[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
-  
+
   const API_URL = useApiUrl()
 
   // Загрузка школ
@@ -36,7 +36,8 @@ const FillDataMode = () => {
     try {
       const res = await fetch(`${API_URL}/schools`)
       if (res.ok) {
-        const data = await res.json()
+        const raw: unknown = await res.json()
+        const data: School[] = Array.isArray(raw) ? (raw as School[]) : []
         // Дедупликация
         const uniqueData = Array.from(
           new Map(data.map((s: School) => [s.id, s])).values()
@@ -76,7 +77,7 @@ const FillDataMode = () => {
     if (!hasCascadeMetrics) {
       return true
     }
-    
+
     // Проверяем, что все каскадные метрики заполнены
     for (const metric of FUNNEL_METRICS) {
       const target = metricsCount[metric.key] || 0
@@ -99,7 +100,7 @@ const FillDataMode = () => {
     if (!hasNumericMetrics) {
       return true
     }
-    
+
     // Проверяем, что все числовые метрики распределены
     for (const metric of NUMERIC_METRICS) {
       const totalValue = metricsCount[metric.key] || 0
@@ -132,15 +133,15 @@ const FillDataMode = () => {
   // Сохранение данных
   const handleSave = async () => {
     if (!selectedDate) return
-    
+
     setSaving(true)
     setSaveSuccess(false)
-    
+
       try {
         // Собираем данные для обновления школ (только каскадные метрики)
         const updates: { schoolId: string; dateField: string; date: string }[] = []
         const unknownFunnelMetrics: Record<string, number> = {}
-        
+
         if (hasCascadeMetrics) {
           for (const metric of FUNNEL_METRICS) {
             const target = metricsCount[metric.key] || 0
@@ -173,11 +174,11 @@ const FillDataMode = () => {
           schoolId: string
           metrics: Record<string, number>
         }> = []
-        
+
         if (hasNumericMetrics) {
           // Группируем по школам
           const schoolMetricsMap: Record<string, Record<string, number>> = {}
-          
+
           Object.entries(numericMetricsBySchool).forEach(([metricKey, schoolValues]) => {
             Object.entries(schoolValues).forEach(([schoolId, value]) => {
               if (value > 0) {
@@ -188,7 +189,7 @@ const FillDataMode = () => {
               }
             })
           })
-          
+
           // Преобразуем в массив
           Object.entries(schoolMetricsMap).forEach(([schoolId, metrics]) => {
             numericMetricsForSave.push({ schoolId, metrics })
@@ -206,7 +207,7 @@ const FillDataMode = () => {
         // Отправляем на сервер
         const res = await authenticatedFetch(`${API_URL}/schools/batch-update`, {
           method: 'POST',
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             updates,
             numericMetricsBySchool: numericMetricsForSave,
             unknownFunnelMetrics,
@@ -215,7 +216,7 @@ const FillDataMode = () => {
         })
 
         if (res.ok) {
-          const responseData = await res.json()
+          await res.json()
           setSaveSuccess(true)
           // Сбрасываем форму через 3 секунды (больше времени на просмотр попапа)
           setTimeout(() => {
@@ -284,8 +285,8 @@ const FillDataMode = () => {
               <div
                 className={`
                   w-10 h-10 rounded-full flex items-center justify-center font-bold
-                  ${currentStep >= step 
-                    ? 'bg-blue-600 text-white' 
+                  ${currentStep >= step
+                    ? 'bg-blue-600 text-white'
                     : 'bg-gray-200 text-gray-500'
                   }
                 `}
@@ -300,7 +301,7 @@ const FillDataMode = () => {
             </div>
           ))}
         </div>
-        
+
         <div className="flex justify-center mt-2 text-sm text-gray-600">
           <span className={`w-28 text-center ${currentStep === 1 ? 'font-medium text-blue-600' : ''}`}>
             Дата
@@ -324,7 +325,7 @@ const FillDataMode = () => {
             selectedDate={selectedDate}
             onDateSelect={setSelectedDate}
           />
-          
+
           <div className="flex justify-center">
             <button
               onClick={() => setCurrentStep(2)}
@@ -349,7 +350,7 @@ const FillDataMode = () => {
             onChange={setMetricsCount}
             selectedDate={selectedDate}
           />
-          
+
           <div className="flex justify-center gap-4">
             <button
               onClick={() => setCurrentStep(1)}
@@ -365,11 +366,11 @@ const FillDataMode = () => {
                   initialSelections[metric.key] = new Set()
                 }
                 setSelections(initialSelections)
-                
+
                 // Определяем, на какой шаг переходить
                 const hasCascade = FUNNEL_METRICS.some(m => (metricsCount[m.key] || 0) > 0)
                 const hasNumeric = NUMERIC_METRICS.some(m => (metricsCount[m.key] || 0) > 0)
-                
+
                 if (hasCascade) {
                   // Есть каскадные метрики - идем на шаг 3
                   setCurrentStep(3)
@@ -406,7 +407,7 @@ const FillDataMode = () => {
                 onSelectionsChange={setSelections}
                 selectedDate={selectedDate}
               />
-              
+
               <div className="flex justify-center gap-4">
                 <button
                   onClick={() => setCurrentStep(2)}
@@ -444,7 +445,7 @@ const FillDataMode = () => {
                   <p className="text-sm text-gray-600">Все метрики заполнены. Можно сохранить.</p>
                 )}
               </div>
-              
+
               <div className="flex justify-center gap-4">
                 <button
                   onClick={() => setCurrentStep(2)}
@@ -483,13 +484,13 @@ const FillDataMode = () => {
           {hasNumericMetrics && !isStep4Complete && hasCascadeMetrics && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
               <p className="text-sm text-yellow-800">
-                <strong>Внимание:</strong> Числовые метрики указаны, но не распределены по школам. 
+                <strong>Внимание:</strong> Числовые метрики указаны, но не распределены по школам.
                 Если сохранить сейчас, каскадные метрики будут сохранены, а числовые метрики будут пропущены.
                 Распределите числовые метрики, чтобы сохранить их тоже.
               </p>
             </div>
           )}
-          
+
           <NumericMetricsDistribution
             allSchools={schools}
             metricsCount={metricsCount}
@@ -498,7 +499,7 @@ const FillDataMode = () => {
             selectedDate={selectedDate}
             recommendedSchoolIds={selections['eventHeld'] || new Set()}
           />
-          
+
           <div className="flex justify-center gap-4">
             <button
               onClick={() => setCurrentStep(3)}
@@ -518,13 +519,13 @@ const FillDataMode = () => {
               {saving ? 'Сохранение...' : 'Сохранить день'}
             </button>
           </div>
-          
+
         </div>
       )}
 
       {/* Попап успешного сохранения (показывается на любом шаге) */}
       {saveSuccess && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50"
           style={{ animation: 'fadeIn 0.3s ease-in' }}
           onClick={() => {
@@ -538,7 +539,7 @@ const FillDataMode = () => {
             loadSchools()
           }}
         >
-          <div 
+          <div
             className="bg-white rounded-xl p-8 text-center shadow-2xl max-w-md mx-4"
             style={{ animation: 'scaleIn 0.3s ease-out' }}
             onClick={(e) => e.stopPropagation()}

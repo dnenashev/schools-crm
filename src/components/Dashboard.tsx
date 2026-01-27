@@ -150,9 +150,9 @@ const sumClassesForSchoolsWithLoadedToCRM = (schools: School[], from: string, to
 
 // Расчёт метрики по школам
 const calculateMetric = (
-  schools: School[], 
-  metricKey: MetricKey, 
-  from: string, 
+  schools: School[],
+  metricKey: MetricKey,
+  from: string,
   to: string
 ): number => {
   const config = METRICS_CONFIG.find(m => m.key === metricKey)
@@ -174,21 +174,22 @@ const calculateMetric = (
   }
 
   // Накопительная метрика (школы в работе)
-  if (config.cumulative) {
+  const cumulativeDateField = config.dateField
+  if (config.cumulative && cumulativeDateField) {
     return schools.filter(s => {
-      const dateField = config.dateField as keyof School
-      const value = s[dateField] as string | null
+      const value = s[cumulativeDateField] as string | null
       return value && value <= to
     }).length + (() => {
       // Накопительный итог по другой метрике (например, "Новые школы" с учётом неизвестных)
-      const cumulativeFrom = (config as any).cumulativeFrom as (MetricKey | undefined)
+      const cumulativeFrom = config.cumulativeFrom
       if (!cumulativeFrom) return 0
       return getUnknownContribution(schools, cumulativeFrom, MIN_YMD, to)
     })()
   }
 
   // Обычная метрика - считаем по дате
-  const dateField = config.dateField as keyof School
+  const dateField = config.dateField
+  if (!dateField) return 0
   const baseCount = schools.filter(s => {
     const value = s[dateField] as string | null
     return isInPeriod(value, from, to)
@@ -225,36 +226,36 @@ interface MonthData {
 const generatePeriods = (): MonthData[] => {
   const months: MonthData[] = []
   const startDate = new Date(2025, 11, 1) // Декабрь 2025
-  
+
   for (let i = 0; i < 6; i++) {
     const monthStart = new Date(startDate.getFullYear(), startDate.getMonth() + i, 1)
     const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0)
-    
+
     const weeks: WeekData[] = []
     let current = new Date(monthStart)
-    
+
     // Находим понедельник первой недели
     const dayOfWeek = current.getDay()
     const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
     current.setDate(current.getDate() + daysToMonday)
-    
+
     while (current <= monthEnd) {
       const weekStart = new Date(current)
       const weekEnd = new Date(current)
       weekEnd.setDate(weekEnd.getDate() + 4) // Пятница
-      
+
       // Проверяем что неделя пересекается с месяцем
       if (weekEnd >= monthStart && weekStart <= monthEnd) {
         const actualStart = weekStart < monthStart ? monthStart : weekStart
         const actualEnd = weekEnd > monthEnd ? monthEnd : weekEnd
-        
+
         // Генерируем дни недели (пн-пт)
         const days: DayData[] = []
         const dayNames = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт']
         for (let d = 0; d < 5; d++) {
           const dayDate = new Date(weekStart)
           dayDate.setDate(dayDate.getDate() + d)
-          
+
           // Проверяем что день входит в месяц
           if (dayDate >= monthStart && dayDate <= monthEnd) {
             days.push({
@@ -264,7 +265,7 @@ const generatePeriods = (): MonthData[] => {
             })
           }
         }
-        
+
         weeks.push({
           weekNumber: getWeekNumber(weekStart),
           from: ymd(actualStart),
@@ -273,10 +274,10 @@ const generatePeriods = (): MonthData[] => {
           days
         })
       }
-      
+
       current.setDate(current.getDate() + 7)
     }
-    
+
     months.push({
       month: formatMsk(monthStart, { month: 'long' }),
       year: monthStart.getFullYear(),
@@ -285,7 +286,7 @@ const generatePeriods = (): MonthData[] => {
       weeks
     })
   }
-  
+
   return months
 }
 
@@ -294,7 +295,7 @@ const getWorkingDaysInPeriod = (from: string, to: string): string[] => {
   const days: string[] = []
   const start = new Date(from + 'T12:00:00')
   const end = new Date(to + 'T12:00:00')
-  
+
   const current = new Date(start)
   while (current <= end) {
     const dayOfWeek = current.getDay()
@@ -304,21 +305,21 @@ const getWorkingDaysInPeriod = (from: string, to: string): string[] => {
     }
     current.setDate(current.getDate() + 1)
   }
-  
+
   return days
 }
 
 // Компонент ячейки с план/факт
-const PlanFactCell = ({ 
-  fact, 
-  plan, 
+const PlanFactCell = ({
+  fact,
+  plan,
   hasUnknown,
-  onClick 
-}: { 
-  fact: number; 
-  plan: number | null; 
+  onClick
+}: {
+  fact: number;
+  plan: number | null;
   hasUnknown: boolean;
-  onClick?: () => void 
+  onClick?: () => void
 }) => {
   // Если плана нет - показываем только факт
   if (plan === null || plan === 0) {
@@ -328,9 +329,9 @@ const PlanFactCell = ({
       </div>
     )
   }
-  
+
   const percentage = plan > 0 ? Math.round((fact / plan) * 100) : 0
-  
+
   // Цветовая индикация
   let bgColor = ''
   let textColor = 'text-gray-500'
@@ -346,9 +347,9 @@ const PlanFactCell = ({
       textColor = 'text-red-600'
     }
   }
-  
+
   return (
-    <div 
+    <div
       className={`cursor-pointer rounded px-1 py-0.5 ${bgColor}`}
       onClick={onClick}
     >
@@ -432,7 +433,7 @@ const Dashboard = () => {
   const [expandedMonths, setExpandedMonths] = useState<Set<number>>(new Set())
   const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set()) // "monthIndex-weekIndex"
   const API_URL = useApiUrl()
-  
+
   const periods = useMemo(() => generatePeriods(), [])
 
   // Загрузка школ и планов
@@ -443,12 +444,12 @@ const Dashboard = () => {
           fetch(`${API_URL}/schools`),
           fetch(`${API_URL}/plans`)
         ])
-        
+
         if (schoolsRes.ok) {
           const schoolsData = await schoolsRes.json()
           setSchools(schoolsData)
         }
-        
+
         if (plansRes.ok) {
           const plansData = await plansRes.json()
           setPlans(plansData)
@@ -466,37 +467,37 @@ const Dashboard = () => {
   const getPlanValue = useMemo(() => {
     return (metricKey: MetricKey, from: string, to: string): number | null => {
       if (plans.length === 0) return null
-      
+
       // Определяем какие месяцы входят в период
       const fromDate = new Date(from + 'T12:00:00')
       const toDate = new Date(to + 'T12:00:00')
-      
+
       let totalPlan = 0
       let hasPlan = false
-      
+
       // Проходим по месяцам в периоде
       const currentMonth = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1)
       while (currentMonth <= toDate) {
         const monthKey = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`
         const plan = plans.find(p => p.month === monthKey)
-        
+
         if (plan && plan.metrics[metricKey] !== undefined) {
           hasPlan = true
           const monthlyTotal = plan.metrics[metricKey] || 0
-          
+
           // Определяем границы месяца
           const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1)
           const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0)
-          
+
           // Пересечение периода запроса с месяцем
           const periodStart = fromDate > monthStart ? fromDate : monthStart
           const periodEnd = toDate < monthEnd ? toDate : monthEnd
-          
+
           // Если есть кастомное распределение - используем его
           if (plan.dailyDistribution && plan.dailyDistribution[metricKey]) {
             const distribution = plan.dailyDistribution[metricKey]
             const periodDays = getWorkingDaysInPeriod(ymd(periodStart), ymd(periodEnd))
-            
+
             totalPlan += periodDays.reduce((sum, day) => {
               return sum + (distribution[day] || 0)
             }, 0)
@@ -504,18 +505,18 @@ const Dashboard = () => {
             // Равномерное распределение
             const monthWorkingDays = getWorkingDaysInPeriod(ymd(monthStart), ymd(monthEnd))
             const periodWorkingDays = getWorkingDaysInPeriod(ymd(periodStart), ymd(periodEnd))
-            
+
             if (monthWorkingDays.length > 0) {
               const dailyRate = monthlyTotal / monthWorkingDays.length
               totalPlan += Math.round(dailyRate * periodWorkingDays.length)
             }
           }
         }
-        
+
         // Переходим к следующему месяцу
         currentMonth.setMonth(currentMonth.getMonth() + 1)
       }
-      
+
       return hasPlan ? totalPlan : null
     }
   }, [plans])
@@ -525,7 +526,7 @@ const Dashboard = () => {
     if (schools.length === 0) return null
     const from = periods[0].from
     const to = periods[periods.length - 1].to
-    
+
     const result: Record<string, number> = {}
     METRICS_CONFIG.forEach(m => {
       result[m.key] = calculateMetric(schools, m.key as MetricKey, from, to)
@@ -584,19 +585,19 @@ const Dashboard = () => {
     <div className="bg-white rounded-lg shadow-lg overflow-hidden">
       {/* Панель управления */}
       <div className="flex flex-wrap gap-4 p-4 bg-gray-50 border-b items-center">
-        <button 
+        <button
           onClick={() => setExpandedMonths(new Set(periods.map((_, i) => i)))}
           className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
         >
           Развернуть месяцы
         </button>
-        <button 
+        <button
           onClick={() => setExpandedMonths(new Set())}
           className="px-3 py-1.5 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
         >
           Свернуть
         </button>
-        
+
         <div className="ml-auto text-sm text-gray-500">
           Всего школ: {schools.length} | В работе: {schools.filter(s => s.inWorkDate).length}
         </div>
@@ -620,9 +621,9 @@ const Dashboard = () => {
                     return sum + (expandedWeeks.has(weekKey) ? week.days.length : 1)
                   }, 0) + 1 // +1 для итога месяца
                 }
-                
+
                 return (
-                  <th 
+                  <th
                     key={monthIndex}
                     colSpan={colSpan}
                     className="px-4 py-3 text-center font-medium text-white bg-blue-600 cursor-pointer hover:bg-blue-700 border-r border-blue-500"
@@ -636,7 +637,7 @@ const Dashboard = () => {
                 Итого
               </th>
             </tr>
-            
+
             {/* Строка недель */}
             {periods.some((_, i) => expandedMonths.has(i)) && (
               <tr className="bg-blue-50">
@@ -651,9 +652,9 @@ const Dashboard = () => {
                         const weekKey = `${monthIndex}-${weekIndex}`
                         const isWeekExpanded = expandedWeeks.has(weekKey)
                         const colSpan = isWeekExpanded ? week.days.length : 1
-                        
+
                         return (
-                          <th 
+                          <th
                             key={`${monthIndex}-${weekIndex}`}
                             colSpan={colSpan}
                             className="px-2 py-2 text-center text-xs font-medium text-blue-800 bg-blue-100 border-r border-blue-200 cursor-pointer hover:bg-blue-200"
@@ -673,10 +674,10 @@ const Dashboard = () => {
                 <th className="bg-gray-700"></th>
               </tr>
             )}
-            
+
             {/* Строка дней (пн-пт) */}
-            {periods.some((month, monthIndex) => 
-              expandedMonths.has(monthIndex) && 
+            {periods.some((month, monthIndex) =>
+              expandedMonths.has(monthIndex) &&
               month.weeks.some((_, weekIndex) => expandedWeeks.has(`${monthIndex}-${weekIndex}`))
             ) && (
               <tr className="bg-green-50">
@@ -690,15 +691,15 @@ const Dashboard = () => {
                       {month.weeks.map((week, weekIndex) => {
                         const weekKey = `${monthIndex}-${weekIndex}`
                         const isWeekExpanded = expandedWeeks.has(weekKey)
-                        
+
                         if (!isWeekExpanded) {
                           return <th key={`${monthIndex}-${weekIndex}`} className="border-r border-green-200"></th>
                         }
-                        
+
                         return (
                           <>
                             {week.days.map((day, dayIndex) => (
-                              <th 
+                              <th
                                 key={`${monthIndex}-${weekIndex}-${dayIndex}`}
                                 className="px-1 py-2 text-center text-xs font-medium text-green-800 bg-green-100 border-r border-green-200"
                               >
@@ -718,36 +719,36 @@ const Dashboard = () => {
               </tr>
             )}
           </thead>
-          
+
           <tbody>
             {METRICS_CONFIG.map((metric, metricIndex) => (
               <tr key={metric.key} className={metricIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                 <td className={`px-4 py-3 font-medium text-gray-900 sticky left-0 z-10 border-r ${metricIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
                   {metric.label}
                 </td>
-                
+
                 {periods.map((month, monthIndex) => {
                   const unknownKey = ((metric as any).cumulativeFrom as MetricKey | undefined) ?? (metric.key as MetricKey)
                   const monthUnknown = getUnknownContribution(schools, unknownKey, month.from, month.to)
                   const monthValue = calculateMetric(schools, metric.key as MetricKey, month.from, month.to)
                   const monthPlan = getPlanValue(metric.key as MetricKey, month.from, month.to)
-                  
+
                   if (!expandedMonths.has(monthIndex)) {
                     return (
-                      <td 
+                      <td
                         key={monthIndex}
                         className="px-4 py-2 text-center border-r border-blue-200"
                       >
-                        <PlanFactCell 
-                          fact={monthValue} 
-                          plan={monthPlan} 
+                        <PlanFactCell
+                          fact={monthValue}
+                          plan={monthPlan}
                           hasUnknown={monthUnknown > 0}
                           onClick={() => openSchoolsList(metric.key as MetricKey, month.from, month.to)}
                         />
                       </td>
                     )
                   }
-                  
+
                   return (
                     <>
                       {month.weeks.map((week, weekIndex) => {
@@ -756,23 +757,23 @@ const Dashboard = () => {
                         const weekUnknown = getUnknownContribution(schools, unknownKey, week.from, week.to)
                         const weekValue = calculateMetric(schools, metric.key as MetricKey, week.from, week.to)
                         const weekPlan = getPlanValue(metric.key as MetricKey, week.from, week.to)
-                        
+
                         if (!isWeekExpanded) {
                           return (
-                            <td 
+                            <td
                               key={`${monthIndex}-${weekIndex}`}
                               className="px-2 py-2 text-center border-r border-blue-100"
                             >
-                              <PlanFactCell 
-                                fact={weekValue} 
-                                plan={weekPlan} 
+                              <PlanFactCell
+                                fact={weekValue}
+                                plan={weekPlan}
                                 hasUnknown={weekUnknown > 0}
                                 onClick={() => openSchoolsList(metric.key as MetricKey, week.from, week.to)}
                               />
                             </td>
                           )
                         }
-                        
+
                         // Раскрытая неделя - показываем дни
                         return (
                           <>
@@ -781,13 +782,13 @@ const Dashboard = () => {
                               const dayValue = calculateMetric(schools, metric.key as MetricKey, day.date, day.date)
                               const dayPlan = getPlanValue(metric.key as MetricKey, day.date, day.date)
                               return (
-                                <td 
+                                <td
                                   key={`${monthIndex}-${weekIndex}-${dayIndex}`}
                                   className="px-1 py-1 text-center text-xs border-r border-green-100"
                                 >
-                                  <PlanFactCell 
-                                    fact={dayValue} 
-                                    plan={dayPlan} 
+                                  <PlanFactCell
+                                    fact={dayValue}
+                                    plan={dayPlan}
                                     hasUnknown={dayUnknown > 0}
                                     onClick={() => openSchoolsList(metric.key as MetricKey, day.date, day.date)}
                                   />
@@ -797,12 +798,12 @@ const Dashboard = () => {
                           </>
                         )
                       })}
-                      <td 
+                      <td
                         className="px-2 py-2 text-center font-medium border-r border-blue-200 bg-blue-50"
                       >
-                        <PlanFactCell 
-                          fact={monthValue} 
-                          plan={monthPlan} 
+                        <PlanFactCell
+                          fact={monthValue}
+                          plan={monthPlan}
                           hasUnknown={monthUnknown > 0}
                           onClick={() => openSchoolsList(metric.key as MetricKey, month.from, month.to)}
                         />
@@ -810,7 +811,7 @@ const Dashboard = () => {
                     </>
                   )
                 })}
-                
+
                 <td className="px-4 py-2 text-center font-bold text-gray-900 bg-gray-100">
                   {(() => {
                     const totalValue = totals?.[metric.key] || 0
@@ -823,13 +824,13 @@ const Dashboard = () => {
                           periods[periods.length - 1].to
                         )
                       : 0
-                    const totalPlan = periods.length > 0 
+                    const totalPlan = periods.length > 0
                       ? getPlanValue(metric.key as MetricKey, periods[0].from, periods[periods.length - 1].to)
                       : null
                     return (
-                      <PlanFactCell 
-                        fact={totalValue} 
-                        plan={totalPlan} 
+                      <PlanFactCell
+                        fact={totalValue}
+                        plan={totalPlan}
                         hasUnknown={totalUnknown > 0}
                         onClick={() => openSchoolsList(metric.key as MetricKey, periods[0].from, periods[periods.length - 1].to)}
                       />
@@ -838,14 +839,14 @@ const Dashboard = () => {
                 </td>
               </tr>
             ))}
-            
+
             {/* Разделитель перед производными метриками */}
             <tr className="bg-purple-100">
               <td colSpan={100} className="px-4 py-2 text-sm font-semibold text-purple-800 sticky left-0 z-10">
                 Конверсии / средние показатели
               </td>
             </tr>
-            
+
             {/* Строки производных метрик */}
             {DERIVED_METRICS.map((row, rowIndex) => (
               <tr key={row.key} className={rowIndex % 2 === 0 ? 'bg-purple-50/50' : 'bg-white'}>
