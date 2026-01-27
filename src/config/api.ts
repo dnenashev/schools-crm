@@ -31,13 +31,19 @@ export const saveMode = (mode: AppMode): void => {
 export const getApiUrl = (mode: AppMode): string => {
   // Check for environment variable (set during build for production)
   const envApiUrl = import.meta.env.VITE_API_URL
-  
+  const normalizeApiUrl = (raw: string): string => {
+    // allow both "https://host" and "https://host/api"
+    const trimmed = raw.trim().replace(/\/+$/, '')
+    if (!trimmed) return trimmed
+    return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`
+  }
+
   if (envApiUrl) {
     // In production, use the configured API URL
     // Sandbox mode is not available in production (only local development)
-    return envApiUrl
+    return normalizeApiUrl(envApiUrl)
   }
-  
+
   // Local development: use localhost with port based on mode
   return `http://localhost:${LOCAL_PORTS[mode]}/api`
 }
@@ -84,27 +90,27 @@ export const authenticatedFetch = async (
   options: RequestInit = {}
 ): Promise<Response> => {
   const token = getAuthToken()
-  
+
   const headers: HeadersInit = {
     ...options.headers,
     'Content-Type': 'application/json',
   }
-  
+
   if (token) {
     (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`
   }
-  
+
   const response = await fetch(url, {
     ...options,
     headers
   })
-  
+
   // Если получили 401, очищаем токен и перенаправляем на логин
   if (response.status === 401) {
     localStorage.removeItem(TOKEN_STORAGE_KEY)
     localStorage.removeItem('schools-crm-user')
     window.location.href = '/login'
   }
-  
+
   return response
 }
