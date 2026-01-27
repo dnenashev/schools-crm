@@ -61,15 +61,12 @@ const CalendarPage = () => {
   const [prefilledDate, setPrefilledDate] = useState<string | null>(null)
   const [prefilledTime, setPrefilledTime] = useState<string | null>(null)
 
-  // Вычисляем воскресенье
-  const currentSunday = addDays(currentMonday, 6)
-
   // Загрузка выездов
   const loadVisits = useCallback(async () => {
     setLoading(true)
     try {
       const from = formatDate(currentMonday)
-      const to = formatDate(currentSunday)
+      const to = formatDate(addDays(currentMonday, 6))
       const res = await authenticatedFetch(`${API_URL}/visits?from=${from}&to=${to}`)
       if (res.ok) {
         const data = await res.json()
@@ -80,7 +77,7 @@ const CalendarPage = () => {
     } finally {
       setLoading(false)
     }
-  }, [API_URL, currentMonday, currentSunday])
+  }, [API_URL, currentMonday])
 
   useEffect(() => {
     loadVisits()
@@ -121,7 +118,7 @@ const CalendarPage = () => {
     setPrefilledTime(null)
   }
 
-  const handleSaveVisit = async () => {
+  const handleSaveVisit = async (): Promise<void> => {
     await loadVisits()
     handleCloseModal()
   }

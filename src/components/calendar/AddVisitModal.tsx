@@ -8,7 +8,7 @@ interface AddVisitModalProps {
   prefilledDate: string | null
   prefilledTime: string | null
   onClose: () => void
-  onSave: () => void
+  onSave: () => Promise<void>
 }
 
 const AddVisitModal = ({ visit, prefilledDate, prefilledTime, onClose, onSave }: AddVisitModalProps) => {
@@ -33,6 +33,7 @@ const AddVisitModal = ({ visit, prefilledDate, prefilledTime, onClose, onSave }:
 
   // Сохранение
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   // Загрузка списка школ
   useEffect(() => {
@@ -90,7 +91,10 @@ const AddVisitModal = ({ visit, prefilledDate, prefilledTime, onClose, onSave }:
 
   // Валидация
   const isValid = useMemo(() => {
-    return managerId && date && timeStart && timeEnd && type && schoolId && schoolName
+    const baseOk = Boolean(managerId && date && timeStart && timeEnd && type)
+    if (!baseOk) return false
+    if (type === 'calls') return true
+    return Boolean(schoolId && schoolName)
   }, [managerId, date, timeStart, timeEnd, type, schoolId, schoolName])
 
   // Сохранение
@@ -108,8 +112,7 @@ const AddVisitModal = ({ visit, prefilledDate, prefilledTime, onClose, onSave }:
         timeStart,
         timeEnd,
         type,
-        schoolId,
-        schoolName,
+        ...(type === 'calls' ? {} : { schoolId, schoolName }),
         notes: notes.trim()
       }
 
@@ -122,7 +125,7 @@ const AddVisitModal = ({ visit, prefilledDate, prefilledTime, onClose, onSave }:
       })
 
       if (res.ok) {
-        onSave()
+        await onSave()
       } else {
         const error = await res.json()
         alert(error.error || 'Ошибка сохранения')
@@ -132,6 +135,29 @@ const AddVisitModal = ({ visit, prefilledDate, prefilledTime, onClose, onSave }:
       alert('Ошибка сохранения')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!visit) return
+    if (!confirm('Удалить этот выезд?')) return
+
+    setDeleting(true)
+    try {
+      const res = await authenticatedFetch(`${API_URL}/visits/${visit.id}`, {
+        method: 'DELETE'
+      })
+      if (res.ok) {
+        await onSave()
+      } else {
+        const error = await res.json()
+        alert(error.error || 'Ошибка удаления')
+      }
+    } catch (error) {
+      console.error('Error deleting visit:', error)
+      alert('Ошибка удаления')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -234,7 +260,16 @@ const AddVisitModal = ({ visit, prefilledDate, prefilledTime, onClose, onSave }:
                     name="visitType"
                     value={vt.value}
                     checked={type === vt.value}
-                    onChange={e => setType(e.target.value as VisitType)}
+                    onChange={e => {
+                      const nextType = e.target.value as VisitType
+                      setType(nextType)
+                      if (nextType === 'calls') {
+                        setSchoolId('')
+                        setSchoolName('')
+                        setSchoolSearch('')
+                        setShowSchoolDropdown(false)
+                      }
+                    }}
                     className="w-4 h-4 text-blue-600"
                   />
                   <span className="text-gray-700">{vt.label}</span>
@@ -244,67 +279,69 @@ const AddVisitModal = ({ visit, prefilledDate, prefilledTime, onClose, onSave }:
           </div>
 
           {/* Школа */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Школа</label>
-            <div className="relative">
-              {schoolName ? (
-                <div className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg bg-gray-50">
-                  <span className="flex-1 text-gray-700">{schoolName}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSchoolId('')
-                      setSchoolName('')
-                    }}
-                    className="p-1 hover:bg-gray-200 rounded transition-colors"
-                  >
-                    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <input
-                    type="text"
-                    placeholder="Поиск школы..."
-                    value={schoolSearch}
-                    onChange={e => {
-                      setSchoolSearch(e.target.value)
-                      setShowSchoolDropdown(true)
-                    }}
-                    onFocus={() => setShowSchoolDropdown(true)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                  />
-                  {showSchoolDropdown && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {loadingSchools ? (
-                        <div className="p-3 text-gray-500 text-center">Загрузка...</div>
-                      ) : filteredSchools.length === 0 ? (
-                        <div className="p-3 text-gray-500 text-center">Ничего не найдено</div>
-                      ) : (
-                        filteredSchools.map(school => (
-                          <button
-                            key={school.id}
-                            type="button"
-                            onClick={() => handleSelectSchool(school)}
-                            className="w-full px-4 py-2 text-left hover:bg-blue-50 transition-colors"
-                          >
-                            <div className="font-medium text-gray-800">{school.name}</div>
-                            {(school.city || school.district) && (
-                              <div className="text-xs text-gray-500">
-                                {[school.city, school.district].filter(Boolean).join(', ')}
-                              </div>
-                            )}
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
+          {type !== 'calls' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Школа</label>
+              <div className="relative">
+                {schoolName ? (
+                  <div className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg bg-gray-50">
+                    <span className="flex-1 text-gray-700">{schoolName}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSchoolId('')
+                        setSchoolName('')
+                      }}
+                      className="p-1 hover:bg-gray-200 rounded transition-colors"
+                    >
+                      <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      type="text"
+                      placeholder="Поиск школы..."
+                      value={schoolSearch}
+                      onChange={e => {
+                        setSchoolSearch(e.target.value)
+                        setShowSchoolDropdown(true)
+                      }}
+                      onFocus={() => setShowSchoolDropdown(true)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    />
+                    {showSchoolDropdown && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        {loadingSchools ? (
+                          <div className="p-3 text-gray-500 text-center">Загрузка...</div>
+                        ) : filteredSchools.length === 0 ? (
+                          <div className="p-3 text-gray-500 text-center">Ничего не найдено</div>
+                        ) : (
+                          filteredSchools.map(school => (
+                            <button
+                              key={school.id}
+                              type="button"
+                              onClick={() => handleSelectSchool(school)}
+                              className="w-full px-4 py-2 text-left hover:bg-blue-50 transition-colors"
+                            >
+                              <div className="font-medium text-gray-800">{school.name}</div>
+                              {(school.city || school.district) && (
+                                <div className="text-xs text-gray-500">
+                                  {[school.city, school.district].filter(Boolean).join(', ')}
+                                </div>
+                              )}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Заметки */}
           <div>
@@ -321,6 +358,21 @@ const AddVisitModal = ({ visit, prefilledDate, prefilledTime, onClose, onSave }:
 
         {/* Кнопки */}
         <div className="px-6 py-4 border-t flex justify-end gap-3">
+          {isEditing && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={saving || deleting}
+              className={`mr-auto px-4 py-2 rounded-lg border transition-colors ${
+                saving || deleting
+                  ? 'border-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'border-red-300 text-red-700 hover:bg-red-50'
+              }`}
+              title="Удалить выезд"
+            >
+              {deleting ? 'Удаление...' : 'Удалить'}
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -331,9 +383,9 @@ const AddVisitModal = ({ visit, prefilledDate, prefilledTime, onClose, onSave }:
           <button
             type="button"
             onClick={handleSave}
-            disabled={!isValid || saving}
+            disabled={!isValid || saving || deleting}
             className={`px-6 py-2 rounded-lg transition-colors ${
-              isValid && !saving
+              isValid && !saving && !deleting
                 ? 'bg-blue-600 text-white hover:bg-blue-700'
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
             }`}
@@ -344,7 +396,7 @@ const AddVisitModal = ({ visit, prefilledDate, prefilledTime, onClose, onSave }:
       </div>
 
       {/* Клик вне модального окна для закрытия dropdown */}
-      {showSchoolDropdown && (
+      {showSchoolDropdown && type !== 'calls' && (
         <div
           className="fixed inset-0 z-0"
           onClick={() => setShowSchoolDropdown(false)}

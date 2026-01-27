@@ -1,5 +1,5 @@
 // Типы выездов менеджеров
-export type VisitType = 'director_meeting' | 'school_event' | 'campus_excursion'
+export type VisitType = 'director_meeting' | 'school_event' | 'campus_excursion' | 'calls'
 
 // Выезд менеджера
 export interface Visit {
@@ -10,8 +10,9 @@ export interface Visit {
   timeStart: string           // HH:MM
   timeEnd: string             // HH:MM
   type: VisitType
-  schoolId: string
-  schoolName: string          // денормализовано для удобства
+  // Для типа calls школа не обязательна
+  schoolId?: string
+  schoolName?: string          // денормализовано для удобства
   notes?: string
   createdAt: string
   createdBy: string
@@ -22,6 +23,7 @@ export const VISIT_TYPES: { value: VisitType; label: string; color: string }[] =
   { value: 'director_meeting', label: 'Встреча с директором', color: 'blue' },
   { value: 'school_event', label: 'Мероприятие в школе', color: 'green' },
   { value: 'campus_excursion', label: 'Экскурсия на кампусе', color: 'purple' },
+  { value: 'calls', label: 'Звонки', color: 'orange' },
 ]
 
 // Менеджеры

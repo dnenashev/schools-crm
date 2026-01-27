@@ -1595,8 +1595,11 @@ app.post('/api/visits', requireAuth, async (req, res) => {
     const { managerId, managerName, date, timeStart, timeEnd, type, schoolId, schoolName, notes } = req.body;
 
     // Валидация
-    if (!managerId || !date || !timeStart || !timeEnd || !type || !schoolId || !schoolName) {
+    if (!managerId || !date || !timeStart || !timeEnd || !type) {
       return res.status(400).json({ error: 'Не все обязательные поля заполнены' });
+    }
+    if (type !== 'calls' && (!schoolId || !schoolName)) {
+      return res.status(400).json({ error: 'Для этого типа выезда нужно выбрать школу' });
     }
 
     const visit = {
@@ -1607,8 +1610,7 @@ app.post('/api/visits', requireAuth, async (req, res) => {
       timeStart,
       timeEnd,
       type,
-      schoolId,
-      schoolName,
+      ...(type === 'calls' ? {} : { schoolId, schoolName }),
       notes: notes || '',
       createdAt: new Date().toISOString(),
       createdBy: req.user?.id || 'unknown'

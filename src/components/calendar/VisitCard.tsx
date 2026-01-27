@@ -26,6 +26,12 @@ const TypeIcon = ({ type }: { type: string }) => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
         </svg>
       )
+    case 'calls':
+      return (
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.95.68l1.5 4.5a1 1 0 01-.5 1.21l-2.2 1.1a11.04 11.04 0 005.52 5.52l1.1-2.2a1 1 0 011.21-.5l4.5 1.5a1 1 0 01.68.95V19a2 2 0 01-2 2h-1C9.82 21 3 14.18 3 6V5z" />
+        </svg>
+      )
     default:
       return null
   }
@@ -41,6 +47,7 @@ const VisitCard = ({ visit, onDelete: _onDelete }: VisitCardProps) => {
     blue: 'bg-blue-50',
     green: 'bg-green-50',
     purple: 'bg-purple-50',
+    orange: 'bg-orange-50',
     gray: 'bg-gray-50'
   }
 
@@ -49,6 +56,7 @@ const VisitCard = ({ visit, onDelete: _onDelete }: VisitCardProps) => {
     blue: 'text-blue-700',
     green: 'text-green-700',
     purple: 'text-purple-700',
+    orange: 'text-orange-700',
     gray: 'text-gray-700'
   }
 
@@ -56,6 +64,7 @@ const VisitCard = ({ visit, onDelete: _onDelete }: VisitCardProps) => {
     <div
       className={`
         rounded px-2 py-1 mb-1 cursor-pointer
+        h-full w-full overflow-hidden
         border-l-4 transition-all hover:shadow-md
         ${bgColorClass[typeColor] || 'bg-gray-50'}
       `}
@@ -80,10 +89,16 @@ const VisitCard = ({ visit, onDelete: _onDelete }: VisitCardProps) => {
         <span className="truncate">{typeLabel}</span>
       </div>
 
-      {/* Школа */}
-      <div className="text-xs text-gray-600 truncate mt-0.5" title={visit.schoolName}>
-        {visit.schoolName}
-      </div>
+      {/* Школа (для calls может отсутствовать) */}
+      {visit.schoolName ? (
+        <div className="text-xs text-gray-600 truncate mt-0.5" title={visit.schoolName}>
+          {visit.schoolName}
+        </div>
+      ) : (
+        <div className="text-xs text-gray-400 truncate mt-0.5 italic">
+          Без школы
+        </div>
+      )}
 
       {/* Заметки (если есть) */}
       {visit.notes && (

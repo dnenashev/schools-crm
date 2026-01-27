@@ -17,7 +17,9 @@ const TOKEN_STORAGE_KEY = 'schools-crm-token'
 export const getSavedMode = (): AppMode => {
   if (typeof window === 'undefined') return 'production'
   const saved = localStorage.getItem(MODE_STORAGE_KEY)
-  return (saved === 'sandbox' || saved === 'production') ? saved : 'production'
+  if (saved === 'sandbox' || saved === 'production') return saved
+  // Local dev default: sandbox (since backend in sandbox runs on 3002)
+  return isSandboxAvailable() ? 'sandbox' : 'production'
 }
 
 // Сохранить режим в localStorage

@@ -28,6 +28,13 @@ const addDays = (d: Date, days: number): Date => {
 // Названия дней недели
 const DAY_NAMES = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 
+const parseTimeToMinutes = (t: string): number => {
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + m
+}
+
+type VisitLayout = { col: number; cols: number }
+
 const WeekView = ({ monday, visits, onAddVisit, onEditVisit, onDeleteVisit }: WeekViewProps) => {
   // Генерируем дни недели
   const weekDays = useMemo(() => {
@@ -59,6 +66,81 @@ const WeekView = ({ monday, visits, onAddVisit, onEditVisit, onDeleteVisit }: We
     })
     return map
   }, [visits])
+
+  // Google Calendar-like layout: compute columns for overlapping intervals per day
+  const layoutByVisitId = useMemo(() => {
+    const result: Record<string, VisitLayout> = {}
+
+    const computeForDay = (dayVisits: Visit[]) => {
+      const items = dayVisits
+        .map(v => ({
+          v,
+          start: parseTimeToMinutes(v.timeStart),
+          end: parseTimeToMinutes(v.timeEnd),
+        }))
+        // treat zero/invalid as minimum duration
+        .map(it => ({
+          ...it,
+          end: Math.max(it.end, it.start + 30),
+        }))
+        .sort((a, b) => (a.start - b.start) || (a.end - b.end))
+
+      // Build overlap clusters (connected components by time overlap)
+      const clusters: typeof items[] = []
+      let current: typeof items = []
+      let currentEnd = -1
+
+      for (const it of items) {
+        if (current.length === 0) {
+          current = [it]
+          currentEnd = it.end
+          continue
+        }
+        if (it.start < currentEnd) {
+          current.push(it)
+          currentEnd = Math.max(currentEnd, it.end)
+        } else {
+          clusters.push(current)
+          current = [it]
+          currentEnd = it.end
+        }
+      }
+      if (current.length) clusters.push(current)
+
+      // For each cluster, assign columns with greedy interval partitioning
+      for (const cluster of clusters) {
+        // active: [{ end, col }]
+        const active: { end: number; col: number }[] = []
+        const freeCols: number[] = []
+        const colById: Record<string, number> = {}
+        let maxColIndex = -1
+
+        for (const it of cluster) {
+          // release finished
+          for (let i = active.length - 1; i >= 0; i--) {
+            if (active[i].end <= it.start) {
+              freeCols.push(active[i].col)
+              active.splice(i, 1)
+            }
+          }
+          freeCols.sort((a, b) => a - b)
+
+          const col = freeCols.length ? (freeCols.shift() as number) : (maxColIndex + 1)
+          maxColIndex = Math.max(maxColIndex, col)
+          colById[it.v.id] = col
+          active.push({ end: it.end, col })
+        }
+
+        const cols = Math.max(1, maxColIndex + 1)
+        for (const it of cluster) {
+          result[it.v.id] = { col: colById[it.v.id], cols }
+        }
+      }
+    }
+
+    Object.values(visitsByDate).forEach(computeForDay)
+    return result
+  }, [visitsByDate])
 
   // Временные слоты для отображения (только часы, без 30-минутных интервалов)
   const timeSlots = useMemo(() => {
@@ -136,14 +218,37 @@ const WeekView = ({ monday, visits, onAddVisit, onEditVisit, onDeleteVisit }: We
               return (
                 <div
                   key={dayIdx}
-                  className={`min-h-[60px] p-1 border-r last:border-r-0 ${
+                  className={`min-h-[60px] p-1 border-r last:border-r-0 relative ${
                     day.isWeekend ? 'bg-gray-100' : 'hover:bg-blue-50'
                   } ${!day.isWeekend ? 'cursor-pointer' : ''}`}
                   onClick={() => !day.isWeekend && handleCellClick(day.dateStr, slotTime)}
                 >
-                  {slotVisits.map(visit => (
-                    <div
+                  {slotVisits.map((visit) => {
+                    const startMinutes = parseTimeToMinutes(visit.timeStart)
+                    const endMinutes = parseTimeToMinutes(visit.timeEnd)
+                    const slotStartMinutes = parseTimeToMinutes(slotTime)
+
+                    // 60px на 1 час => 1px на 1 минуту
+                    const topPx = Math.max(0, startMinutes - slotStartMinutes)
+                    const durationPx = Math.max(24, endMinutes - startMinutes)
+
+                    const layout = layoutByVisitId[visit.id] || { col: 0, cols: 1 }
+                    const colWidthPct = 100 / Math.max(1, layout.cols)
+                    const leftPct = layout.col * colWidthPct
+
+                    return (
+                      <div
                       key={visit.id}
+                      className="absolute z-10"
+                      style={{
+                        top: `${topPx}px`,
+                        // Делим ширину на колонки и добавляем небольшой gap,
+                        // чтобы карточки не налезали друг на друга визуально.
+                        left: `calc(${leftPct}% + 2px)`,
+                        width: `calc(${colWidthPct}% - 4px)`,
+                        boxSizing: 'border-box',
+                        height: `${durationPx}px`,
+                      }}
                       onClick={e => {
                         e.stopPropagation()
                         onEditVisit(visit)
@@ -154,7 +259,8 @@ const WeekView = ({ monday, visits, onAddVisit, onEditVisit, onDeleteVisit }: We
                         onDelete={() => onDeleteVisit(visit.id)}
                       />
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )
             })}
