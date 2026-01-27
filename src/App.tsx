@@ -7,12 +7,13 @@ import DashboardPage from './pages/DashboardPage'
 import SchoolsPage from './pages/SchoolsPage'
 import VersionsPage from './pages/VersionsPage'
 import PipelinePage from './pages/PipelinePage'
+import CalendarPage from './pages/CalendarPage'
 import { ReactNode } from 'react'
 
 // Компонент для защищённых маршрутов
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, loading } = useAuth()
-  
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -20,18 +21,18 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
       </div>
     )
   }
-  
+
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
   }
-  
+
   return <>{children}</>
 }
 
 // Компонент для страницы логина (редирект если уже авторизован)
 function LoginRoute() {
   const { isAuthenticated, loading } = useAuth()
-  
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -39,11 +40,11 @@ function LoginRoute() {
       </div>
     )
   }
-  
+
   if (isAuthenticated) {
     return <Navigate to="/" replace />
   }
-  
+
   return <LoginPage />
 }
 
@@ -76,6 +77,13 @@ function AppRoutes() {
         <ProtectedRoute>
           <Layout>
             <PipelinePage />
+          </Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/calendar" element={
+        <ProtectedRoute>
+          <Layout>
+            <CalendarPage />
           </Layout>
         </ProtectedRoute>
       } />

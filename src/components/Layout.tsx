@@ -16,6 +16,7 @@ const Layout = ({ children }: LayoutProps) => {
   const navLinks = [
     { path: '/', label: 'Дашборд' },
     { path: '/pipeline', label: 'Пайплайн' },
+    { path: '/calendar', label: 'Календарь' },
     { path: '/schools', label: 'Школы' },
     { path: '/versions', label: 'Версии', adminOnly: true },
   ]
@@ -40,7 +41,7 @@ const Layout = ({ children }: LayoutProps) => {
                 (тестовый режим)
               </span>
             )}
-            
+
             {/* Навигация */}
             <nav className="flex items-center gap-1">
               {visibleLinks.map(link => (
@@ -58,10 +59,10 @@ const Layout = ({ children }: LayoutProps) => {
               ))}
             </nav>
           </div>
-          
+
           <div className="flex items-center gap-4">
             <ModeSwitcher />
-            
+
             {/* Информация о пользователе */}
             {user && (
               <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
@@ -83,7 +84,7 @@ const Layout = ({ children }: LayoutProps) => {
           </div>
         </div>
       </div>
-      
+
       {/* Предупреждение для sandbox */}
       {isSandbox && (
         <div className="bg-orange-100 border-b border-orange-300 px-4 py-2">
@@ -92,7 +93,7 @@ const Layout = ({ children }: LayoutProps) => {
           </div>
         </div>
       )}
-      
+
       {/* Основной контент */}
       {children}
     </div>

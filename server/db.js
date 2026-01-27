@@ -79,6 +79,13 @@ async function createIndexes() {
     await versionsCollection.createIndex({ timestamp: -1 });
     await versionsCollection.createIndex({ createdAt: -1 });
 
+    // Visits collection indexes (calendar)
+    const visitsCollection = db.collection('visits');
+    await visitsCollection.createIndex({ id: 1 }, { unique: true });
+    await visitsCollection.createIndex({ date: 1 });
+    await visitsCollection.createIndex({ managerId: 1 });
+    await visitsCollection.createIndex({ date: 1, managerId: 1 });
+
     console.log('✅ MongoDB indexes created');
   } catch (error) {
     console.warn('⚠️ Error creating indexes:', error.message);
@@ -130,7 +137,7 @@ export async function updateSchool(schoolId, updates) {
  */
 export async function saveAllSchools(schools) {
   const collection = getDB().collection('schools');
-  
+
   const operations = schools.map(school => ({
     updateOne: {
       filter: { id: school.id },
@@ -182,7 +189,7 @@ export async function getUserById(userId) {
  */
 export async function saveAllUsers(users) {
   const collection = getDB().collection('users');
-  
+
   const operations = users.map(user => ({
     updateOne: {
       filter: { id: user.id },
@@ -255,7 +262,7 @@ const VERSION_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
  */
 export async function createVersion(schools, userId = null) {
   const collection = getDB().collection('versions');
-  
+
   // Check if we created a version recently
   const lastVersion = await collection.findOne({}, { sort: { createdAt: -1 } });
   if (lastVersion) {
@@ -284,7 +291,7 @@ export async function createVersion(schools, userId = null) {
       .sort({ createdAt: 1 })
       .limit(count - MAX_VERSIONS)
       .toArray();
-    
+
     const idsToDelete = oldVersions.map(v => v._id);
     await collection.deleteMany({ _id: { $in: idsToDelete } });
   }
@@ -326,4 +333,71 @@ export async function restoreVersion(timestamp) {
     return null;
   }
   return version.data;
+}
+
+// ==================== VISITS (CALENDAR) ====================
+
+/**
+ * Get visits for a date range
+ * @param {string} fromDate - YYYY-MM-DD
+ * @param {string} toDate - YYYY-MM-DD
+ * @returns {Promise<Array>}
+ */
+export async function getVisits(fromDate, toDate) {
+  const collection = getDB().collection('visits');
+  return collection
+    .find({
+      date: { $gte: fromDate, $lte: toDate }
+    })
+    .project({ _id: 0 })
+    .sort({ date: 1, timeStart: 1 })
+    .toArray();
+}
+
+/**
+ * Get visit by id
+ * @param {string} visitId
+ * @returns {Promise<Object|null>}
+ */
+export async function getVisitById(visitId) {
+  const collection = getDB().collection('visits');
+  return collection.findOne({ id: visitId }, { projection: { _id: 0 } });
+}
+
+/**
+ * Create a new visit
+ * @param {Object} visit
+ * @returns {Promise<Object>}
+ */
+export async function createVisit(visit) {
+  const collection = getDB().collection('visits');
+  await collection.insertOne(visit);
+  return visit;
+}
+
+/**
+ * Update visit by id
+ * @param {string} visitId
+ * @param {Object} updates
+ * @returns {Promise<Object|null>}
+ */
+export async function updateVisit(visitId, updates) {
+  const collection = getDB().collection('visits');
+  const result = await collection.findOneAndUpdate(
+    { id: visitId },
+    { $set: updates },
+    { returnDocument: 'after', projection: { _id: 0 } }
+  );
+  return result;
+}
+
+/**
+ * Delete visit by id
+ * @param {string} visitId
+ * @returns {Promise<boolean>}
+ */
+export async function deleteVisit(visitId) {
+  const collection = getDB().collection('visits');
+  const result = await collection.deleteOne({ id: visitId });
+  return result.deletedCount > 0;
 }

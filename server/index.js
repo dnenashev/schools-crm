@@ -21,7 +21,12 @@ import {
   createVersion,
   getAllVersions,
   getVersionByTimestamp,
-  restoreVersion
+  restoreVersion,
+  getVisits,
+  getVisitById,
+  createVisit,
+  updateVisit,
+  deleteVisit
 } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -51,8 +56,8 @@ const PORT = process.env.PORT || (IS_SANDBOX ? 3002 : 3001);
 // CORS configuration
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 const corsOptions = {
-  origin: IS_PRODUCTION && CORS_ORIGIN !== '*' 
-    ? CORS_ORIGIN.split(',').map(o => o.trim()) 
+  origin: IS_PRODUCTION && CORS_ORIGIN !== '*'
+    ? CORS_ORIGIN.split(',').map(o => o.trim())
     : true,
   credentials: true
 };
@@ -87,7 +92,7 @@ if (IS_SANDBOX) {
   if (!fs.existsSync(BACKUPS_DIR)) {
     fs.mkdirSync(BACKUPS_DIR, { recursive: true });
   }
-  
+
   // Copy production data to sandbox on first run
   if (!fs.existsSync(SCHOOLS_FILE) && fs.existsSync(PRODUCTION_SCHOOLS_FILE)) {
     console.log('📋 Sandbox: копирование данных из production...');
@@ -125,13 +130,13 @@ const verifyPassword = async (inputPassword, storedPassword) => {
 // Middleware: проверка JWT токена
 const requireAuth = (req, res, next) => {
   const authHeader = req.headers.authorization;
-  
+
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Необходима авторизация' });
   }
-  
+
   const token = authHeader.split(' ')[1];
-  
+
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded;
@@ -169,7 +174,7 @@ const createBackupLocal = (userId = null) => {
   } catch (e) {
     console.warn('⚠️ Не удалось прочитать meta бэкапов:', e?.message || e);
   }
-  
+
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const userSuffix = userId ? `_${userId}` : '';
   const backupFile = path.join(BACKUPS_DIR, `${prefix}${timestamp}${userSuffix}.json`);
@@ -185,18 +190,18 @@ const createBackupLocal = (userId = null) => {
   } catch (e) {
     console.warn('⚠️ Не удалось записать meta бэкапов:', e?.message || e);
   }
-  
+
   const backups = fs.readdirSync(BACKUPS_DIR)
     .filter(f => f.startsWith(prefix) && f.endsWith('.json'))
     .sort()
     .reverse();
-  
+
   if (backups.length > 50) {
     backups.slice(50).forEach(f => {
       fs.unlinkSync(path.join(BACKUPS_DIR, f));
     });
   }
-  
+
   return timestamp;
 };
 
@@ -271,7 +276,7 @@ const dedupeSchoolsById = (schools) => {
 // Сохранение школ с указанием пользователя для бэкапа
 const saveSchools = async (schools, userId = null) => {
   const { schools: deduped } = dedupeSchoolsById(schools);
-  
+
   if (IS_SANDBOX) {
     // Sandbox: file-based storage
     createBackupLocal(userId);
@@ -332,31 +337,31 @@ const savePlansData = async (plans, userId = null) => {
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    
+
     if (!username || !password) {
       return res.status(400).json({ error: 'Укажите логин и пароль' });
     }
-    
+
     const users = await readUsers();
     const user = users.find(u => u.id === username);
-    
+
     if (!user) {
       return res.status(401).json({ error: 'Неверный логин или пароль' });
     }
-    
+
     // Verify password (supports bcrypt hashes and plaintext for migration)
     const passwordValid = await verifyPassword(password, user.password || user.passwordHash || '');
     if (!passwordValid) {
       return res.status(401).json({ error: 'Неверный логин или пароль' });
     }
-    
+
     // Создаём JWT токен
     const token = jwt.sign(
       { id: user.id, name: user.name, role: user.role },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN }
     );
-    
+
     res.json({
       success: true,
       token,
@@ -387,10 +392,10 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
 
 // GET /api/mode — получить текущий режим
 app.get('/api/mode', (req, res) => {
-  res.json({ 
-    mode: MODE, 
+  res.json({
+    mode: MODE,
     isSandbox: IS_SANDBOX,
-    port: PORT 
+    port: PORT
   });
 });
 
@@ -433,15 +438,15 @@ app.put('/api/schools/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const schools = await readSchools();
     const index = schools.findIndex(s => s.id === req.params.id);
-    
+
     if (index === -1) {
       return res.status(404).json({ error: 'Школа не найдена' });
     }
-    
+
     // Обновляем только переданные поля
     schools[index] = { ...schools[index], ...req.body };
     await saveSchools(schools, req.user?.id);
-    
+
     res.json({ success: true, school: schools[index] });
   } catch (error) {
     console.error('Error updating school:', error);
@@ -454,11 +459,11 @@ app.post('/api/schools/:id/activity', requireAuth, async (req, res) => {
   try {
     const schools = await readSchools();
     const index = schools.findIndex(s => s.id === req.params.id);
-    
+
     if (index === -1) {
       return res.status(404).json({ error: 'Школа не найдена' });
     }
-    
+
     const activity = {
       id: `act_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       date: req.body.date || getMskDateString(),
@@ -469,14 +474,14 @@ app.post('/api/schools/:id/activity', requireAuth, async (req, res) => {
       createdBy: req.user.id, // Кто создал активность
       createdByName: req.user?.name || null
     };
-    
+
     if (!schools[index].activities) {
       schools[index].activities = [];
     }
     schools[index].activities.push(activity);
-    
+
     await saveSchools(schools, req.user.id);
-    
+
     res.json({ success: true, activity, school: schools[index] });
   } catch (error) {
     console.error('Error adding activity:', error);
@@ -489,19 +494,19 @@ app.put('/api/schools/:id/status', requireAuth, requireAdmin, async (req, res) =
   try {
     const schools = await readSchools();
     const index = schools.findIndex(s => s.id === req.params.id);
-    
+
     if (index === -1) {
       return res.status(404).json({ error: 'Школа не найдена' });
     }
-    
+
     const { statusField, date } = req.body;
     const statusDate = date || getMskDateString();
-    
+
     // Обновляем статус
     schools[index][statusField] = statusDate;
-    
+
     await saveSchools(schools, req.user?.id);
-    
+
     res.json({ success: true, school: schools[index] });
   } catch (error) {
     console.error('Error updating status:', error);
@@ -514,12 +519,12 @@ app.get('/api/metrics', async (req, res) => {
   try {
     const { from, to } = req.query;
     const schools = await readSchools();
-    
+
     const isInPeriod = (dateStr, periodStart, periodEnd) => {
       if (!dateStr) return false;
       return dateStr >= periodStart && dateStr <= periodEnd;
     };
-    
+
     const metrics = {
       newSchools: schools.filter(s => isInPeriod(s.inWorkDate, from, to)).length,
       schoolsInWork: schools.filter(s => s.inWorkDate && s.inWorkDate <= to).length,
@@ -540,7 +545,7 @@ app.get('/api/metrics', async (req, res) => {
           .reduce((s, a) => s + (a.parentContacts || 0), 0);
       }, 0)
     };
-    
+
     res.json(metrics);
   } catch (error) {
     console.error('Error calculating metrics:', error);
@@ -555,7 +560,7 @@ app.get('/api/versions', async (req, res) => {
       // Sandbox: file-based versions
       const prefix = IS_SANDBOX ? 'sandbox_' : 'schools_';
       const users = await readUsers();
-      
+
       const backups = fs.readdirSync(BACKUPS_DIR)
         .filter(f => f.startsWith(prefix) && f.endsWith('.json'))
         .sort()
@@ -563,13 +568,13 @@ app.get('/api/versions', async (req, res) => {
         .map(filename => {
           const filePath = path.join(BACKUPS_DIR, filename);
           const stats = fs.statSync(filePath);
-          
+
           const nameWithoutPrefix = filename.replace(prefix, '').replace('.json', '');
           const timestamp = nameWithoutPrefix.slice(0, 19);
           const userId = nameWithoutPrefix.length > 19 ? nameWithoutPrefix.slice(20) : null;
-          
+
           const user = userId ? users.find(u => u.id === userId) : null;
-          
+
           return {
             filename,
             timestamp,
@@ -579,14 +584,14 @@ app.get('/api/versions', async (req, res) => {
             userName: user ? user.name : null
           };
         });
-      
+
       return res.json(backups);
     }
-    
+
     // Production: MongoDB versions
     const versions = await getAllVersions();
     const users = await readUsers();
-    
+
     const formattedVersions = versions.map(v => {
       const user = v.userId ? users.find(u => u.id === v.userId) : null;
       return {
@@ -597,7 +602,7 @@ app.get('/api/versions', async (req, res) => {
         userName: user ? user.name : null
       };
     });
-    
+
     res.json(formattedVersions);
   } catch (error) {
     console.error('Error reading versions:', error);
@@ -609,35 +614,35 @@ app.get('/api/versions', async (req, res) => {
 app.post('/api/restore/:version', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { version } = req.params;
-    
+
     if (IS_SANDBOX) {
       // Sandbox: file-based restore
       const prefix = 'sandbox_';
       const backupFile = path.join(BACKUPS_DIR, `${prefix}${version}.json`);
-      
+
       if (!fs.existsSync(backupFile)) {
         return res.status(404).json({ error: 'Версия не найдена' });
       }
-      
+
       createBackupLocal();
       fs.copyFileSync(backupFile, SCHOOLS_FILE);
-      
+
       return res.json({ success: true, message: `Данные восстановлены из версии ${version}` });
     }
-    
+
     // Production: MongoDB restore
     const versionData = await restoreVersion(version);
     if (!versionData) {
       return res.status(404).json({ error: 'Версия не найдена' });
     }
-    
+
     // Create backup of current state before restore
     const currentSchools = await getAllSchools();
     await createVersion(currentSchools, req.user?.id);
-    
+
     // Restore schools from version
     await saveAllSchools(versionData);
-    
+
     res.json({ success: true, message: `Данные восстановлены из версии ${version}` });
   } catch (error) {
     console.error('Error restoring version:', error);
@@ -650,11 +655,11 @@ app.post('/api/sandbox/reset', async (req, res) => {
   if (!IS_SANDBOX) {
     return res.status(403).json({ error: 'Доступно только в sandbox режиме' });
   }
-  
+
   try {
     // Создаём бэкап текущих sandbox данных
     createBackupLocal();
-    
+
     // Копируем данные из production
     if (fs.existsSync(PRODUCTION_SCHOOLS_FILE)) {
       fs.copyFileSync(PRODUCTION_SCHOOLS_FILE, SCHOOLS_FILE);
@@ -674,10 +679,10 @@ app.post('/api/sandbox/clear', requireAuth, requireAdmin, async (req, res) => {
   if (!IS_SANDBOX) {
     return res.status(403).json({ error: 'Доступно только в sandbox режиме' });
   }
-  
+
   try {
     console.log('Начало очистки sandbox данных...');
-    
+
     // Создаём бэкап текущих sandbox данных перед очисткой
     try {
       createBackupLocal();
@@ -685,7 +690,7 @@ app.post('/api/sandbox/clear', requireAuth, requireAdmin, async (req, res) => {
     } catch (backupError) {
       console.warn('Ошибка при создании бэкапа (продолжаем):', backupError);
     }
-    
+
     // Загружаем текущие школы
     let schools;
     try {
@@ -695,12 +700,12 @@ app.post('/api/sandbox/clear', requireAuth, requireAdmin, async (req, res) => {
       console.error('Ошибка чтения школ:', readError);
       return res.status(500).json({ error: `Ошибка чтения данных: ${readError.message}` });
     }
-    
+
     if (!Array.isArray(schools)) {
       console.error('Данные не являются массивом:', typeof schools);
       return res.status(500).json({ error: 'Некорректный формат данных школ' });
     }
-    
+
     // Очищаем только метрики и активности, сохраняя базовую информацию о школах
     let cleanedSchools;
     try {
@@ -709,7 +714,7 @@ app.post('/api/sandbox/clear', requireAuth, requireAdmin, async (req, res) => {
           console.warn(`Пропущена некорректная запись школы #${index}:`, school);
           return null;
         }
-        
+
         // Создаем объект с базовой информацией
         const cleaned = {
           // Базовая информация о школе (сохраняем)
@@ -724,7 +729,7 @@ app.post('/api/sandbox/clear', requireAuth, requireAdmin, async (req, res) => {
           travelTime: school.travelTime || '',
           tags: Array.isArray(school.tags) ? school.tags : [],
           amoLink: school.amoLink || '',
-          
+
           // Очищаем все даты и метрики
           inWorkDate: null,
           contactDate: null,
@@ -738,7 +743,7 @@ app.post('/api/sandbox/clear', requireAuth, requireAdmin, async (req, res) => {
           arrivedToCampusDate: null,
           preliminaryMeetingDate: null,
           excursionPlannedDate: null,
-          
+
           // Очищаем статусы звонков и диалогов
           callStatus: null,
           callDate: null,
@@ -747,7 +752,7 @@ app.post('/api/sandbox/clear', requireAuth, requireAdmin, async (req, res) => {
           dialogueDate: null,
           dialogueNotes: '',
           callbackDate: null,
-          
+
           // Очищаем статусы встреч и мероприятий
           meetingStatus: null,
           meetingDate: null,
@@ -755,28 +760,28 @@ app.post('/api/sandbox/clear', requireAuth, requireAdmin, async (req, res) => {
           eventStatus: null,
           eventDate: null,
           eventNotes: '',
-          
+
           // Очищаем числовые метрики
           classesCount: 0,
           leadsCount: 0,
           campusVisitsCount: 0,
-          
+
           // Очищаем активности
           activities: [],
-          
+
           // Очищаем заметки
           notes: ''
         };
-        
+
         return cleaned;
       }).filter(school => school !== null); // Удаляем некорректные записи
-      
+
       console.log(`Очищено школ: ${cleanedSchools.length} из ${schools.length}`);
     } catch (mapError) {
       console.error('Ошибка при обработке школ:', mapError);
       return res.status(500).json({ error: `Ошибка обработки данных: ${mapError.message}` });
     }
-    
+
     // Сохраняем очищенные данные
     try {
       await saveSchools(cleanedSchools, req.user?.id);
@@ -785,18 +790,18 @@ app.post('/api/sandbox/clear', requireAuth, requireAdmin, async (req, res) => {
       console.error('Ошибка сохранения:', saveError);
       return res.status(500).json({ error: `Ошибка сохранения: ${saveError.message}` });
     }
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: `Метрики и активности очищены. Сохранено школ: ${cleanedSchools.length}`,
       schoolsCount: cleanedSchools.length
     });
   } catch (error) {
     console.error('Критическая ошибка при очистке sandbox:', error);
     console.error('Stack:', error.stack);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Ошибка очистки sandbox данных',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -805,7 +810,7 @@ app.post('/api/sandbox/clear', requireAuth, requireAdmin, async (req, res) => {
 app.post('/api/schools/batch-update', requireAuth, async (req, res) => {
   try {
     const { updates, numericMetricsBySchool, unknownFunnelMetrics, date } = req.body;
-    
+
     console.log('Batch update request:', {
       updatesCount: updates?.length || 0,
       numericMetricsCount: numericMetricsBySchool?.length || 0,
@@ -813,18 +818,18 @@ app.post('/api/schools/batch-update', requireAuth, async (req, res) => {
       date,
       userId: req.user?.id
     });
-    
+
     // updates может быть пустым массивом, если заполнены только числовые метрики
     const updatesArray = Array.isArray(updates) ? updates : [];
-    
+
     if (!date) {
       return res.status(400).json({ error: 'Не указана дата' });
     }
-    
+
     const schools = await readSchools();
     let updatedCount = 0;
     let unknownFunnelCount = 0;
-    
+
     // Группируем обновления по школам (каскадные метрики - выбор школ)
     const schoolUpdates = {};
     updatesArray.forEach(update => {
@@ -838,7 +843,7 @@ app.post('/api/schools/batch-update', requireAuth, async (req, res) => {
       }
       schoolUpdates[schoolId][dateField] = updateDate || date;
     });
-    
+
     // Применяем обновления школ
     for (const [schoolId, fields] of Object.entries(schoolUpdates)) {
       // Обработка виртуальной школы "неизвестно"
@@ -889,21 +894,21 @@ app.post('/api/schools/batch-update', requireAuth, async (req, res) => {
           notes: 'Создано автоматически для метрик без указания школы',
           activities: []
         };
-        
+
         // Применяем поля обновления
         Object.assign(unknownSchool, fields);
         schools.push(unknownSchool);
         updatedCount++;
         continue;
       }
-      
+
       const index = schools.findIndex(s => s.id === schoolId);
       if (index !== -1) {
         schools[index] = { ...schools[index], ...fields };
         updatedCount++;
       }
     }
-    
+
     // Обрабатываем числовые метрики (привязанные к школам с мероприятием)
     let numericMetricsCount = 0;
     if (numericMetricsBySchool && Array.isArray(numericMetricsBySchool)) {
@@ -912,10 +917,10 @@ app.post('/api/schools/batch-update', requireAuth, async (req, res) => {
           console.warn('Пропущена некорректная числовая метрика:', item);
           return;
         }
-        
+
         const { schoolId, metrics } = item;
         numericMetricsCount++;
-        
+
         // Обработка виртуальной школы "неизвестно" (одна запись: __unknown_school__)
         if (schoolId === '__unknown_school__') {
           let idx = schools.findIndex(s => s.id === '__unknown_school__');
@@ -1005,14 +1010,14 @@ app.post('/api/schools/batch-update', requireAuth, async (req, res) => {
 
           return;
         }
-        
+
         const index = schools.findIndex(s => s.id === schoolId);
         if (index !== -1) {
           // Сохраняем числовые метрики в активности школы
           if (!schools[index].activities) {
             schools[index].activities = [];
           }
-          
+
           // Создаем активность с числовыми метриками
           const activity = {
             id: `act_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -1032,9 +1037,9 @@ app.post('/api/schools/batch-update', requireAuth, async (req, res) => {
             createdBy: req.user?.id,
             createdByName: req.user?.name || null
           };
-          
+
           schools[index].activities.push(activity);
-          
+
           // Также обновляем поля школы напрямую, если они есть
           if (metrics.qualifiedLeads) {
             schools[index].qualifiedLeadDate = date;
@@ -1134,7 +1139,7 @@ app.post('/api/schools/batch-update', requireAuth, async (req, res) => {
         unknownFunnelCount = Object.values(cleaned).reduce((s, v) => s + v, 0);
       }
     }
-    
+
     // Сохраняем, если есть обновления или числовые метрики
     if (updatedCount > 0 || numericMetricsCount > 0 || unknownFunnelCount > 0) {
       await saveSchools(schools, req.user?.id);
@@ -1155,9 +1160,9 @@ app.post('/api/schools/batch-update', requireAuth, async (req, res) => {
 
       return res.status(400).json({ error: 'Нет данных для сохранения', debug });
     }
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: `Обновлено школ: ${updatedCount}${numericMetricsCount > 0 ? `, числовые метрики привязаны к ${numericMetricsCount} школам` : ''}${unknownFunnelCount > 0 ? `, неизвестно (воронка): ${unknownFunnelCount}` : ''}`,
       updatedCount,
       numericMetricsCount,
@@ -1167,9 +1172,9 @@ app.post('/api/schools/batch-update', requireAuth, async (req, res) => {
     console.error('Error batch updating schools:', error);
     console.error('Error stack:', error.stack);
     console.error('Request body:', JSON.stringify(req.body, null, 2));
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Ошибка массового обновления',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -1279,7 +1284,7 @@ app.post('/api/schools/resolve-unknown', requireAuth, async (req, res) => {
 
     for (const resolution of resolutions) {
       const { schoolId, date, value } = resolution;
-      
+
       if (!schoolId || !date) {
         errors.push(`Пропущен schoolId или date в resolution`);
         continue;
@@ -1327,15 +1332,15 @@ app.post('/api/schools/resolve-unknown', requireAuth, async (req, res) => {
     // Уменьшаем счётчик в activity
     if (inferredType === 'funnel') {
       if (resolvedCount > currentCount) {
-        return res.status(400).json({ 
-          error: `Нельзя раскрыть больше школ (${resolvedCount}) чем есть неизвестных (${currentCount})` 
+        return res.status(400).json({
+          error: `Нельзя раскрыть больше школ (${resolvedCount}) чем есть неизвестных (${currentCount})`
         });
       }
       activity.metrics[metricKey] -= resolvedCount;
     } else {
       if (totalNumericResolved > currentCount) {
-        return res.status(400).json({ 
-          error: `Нельзя перенести больше значения (${totalNumericResolved}) чем есть неизвестного (${currentCount})` 
+        return res.status(400).json({
+          error: `Нельзя перенести больше значения (${totalNumericResolved}) чем есть неизвестного (${currentCount})`
         });
       }
       // Списываем сначала из legacy parentContacts (если применимо), потом из metrics
@@ -1437,7 +1442,7 @@ app.get('/api/plans', async (req, res) => {
 app.get('/api/plans/:month', async (req, res) => {
   try {
     const { month } = req.params;
-    
+
     if (IS_SANDBOX) {
       const { plans } = await readPlans();
       const plan = plans.find(p => p.month === month);
@@ -1446,7 +1451,7 @@ app.get('/api/plans/:month', async (req, res) => {
       }
       return res.json(plan);
     }
-    
+
     // Production: direct MongoDB query
     const plan = await getPlanByMonth(month);
     if (!plan) {
@@ -1464,22 +1469,22 @@ app.put('/api/plans/:month', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { month } = req.params;
     const { metrics, dailyDistribution } = req.body;
-    
+
     // Валидация формата месяца (YYYY-MM)
     if (!/^\d{4}-\d{2}$/.test(month)) {
       return res.status(400).json({ error: 'Некорректный формат месяца. Ожидается: YYYY-MM' });
     }
-    
+
     // Валидация метрик
     if (!metrics || typeof metrics !== 'object') {
       return res.status(400).json({ error: 'metrics обязателен и должен быть объектом' });
     }
-    
+
     const { plans } = await readPlans();
     const existingIndex = plans.findIndex(p => p.month === month);
-    
+
     const now = new Date().toISOString();
-    
+
     const planData = {
       id: `plan_${month}`,
       month,
@@ -1488,7 +1493,7 @@ app.put('/api/plans/:month', requireAuth, requireAdmin, async (req, res) => {
       updatedAt: now,
       updatedBy: req.user.id
     };
-    
+
     if (existingIndex === -1) {
       // Создание нового плана
       planData.createdAt = now;
@@ -1502,11 +1507,11 @@ app.put('/api/plans/:month', requireAuth, requireAdmin, async (req, res) => {
       plans[existingIndex] = planData;
       console.log(`📋 Обновлён план на ${month} пользователем ${req.user.id}`);
     }
-    
+
     await savePlansData(plans, req.user.id);
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       plan: planData,
       message: existingIndex === -1 ? 'План создан' : 'План обновлён'
     });
@@ -1520,28 +1525,28 @@ app.put('/api/plans/:month', requireAuth, requireAdmin, async (req, res) => {
 app.delete('/api/plans/:month', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { month } = req.params;
-    
+
     if (IS_SANDBOX) {
       const { plans } = await readPlans();
       const index = plans.findIndex(p => p.month === month);
-      
+
       if (index === -1) {
         return res.status(404).json({ error: 'План не найден' });
       }
-      
+
       plans.splice(index, 1);
       await savePlansData(plans, req.user.id);
-      
+
       console.log(`📋 Удалён план на ${month} пользователем ${req.user.id}`);
       return res.json({ success: true, message: 'План удалён' });
     }
-    
+
     // Production: direct MongoDB delete
     const deleted = await deletePlan(month);
     if (!deleted) {
       return res.status(404).json({ error: 'План не найден' });
     }
-    
+
     console.log(`📋 Удалён план на ${month} пользователем ${req.user.id}`);
     res.json({ success: true, message: 'План удалён' });
   } catch (error) {
@@ -1550,10 +1555,162 @@ app.delete('/api/plans/:month', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+// ============== VISITS (CALENDAR) ==============
+
+// GET /api/visits — получить выезды за период
+app.get('/api/visits', requireAuth, async (req, res) => {
+  try {
+    const { from, to } = req.query;
+
+    if (!from || !to) {
+      return res.status(400).json({ error: 'Параметры from и to обязательны (YYYY-MM-DD)' });
+    }
+
+    if (IS_SANDBOX) {
+      // Sandbox: file-based visits (simplified - store in visits.json)
+      const visitsFile = path.join(DATA_DIR, 'visits_sandbox.json');
+      if (!fs.existsSync(visitsFile)) {
+        return res.json([]);
+      }
+      const allVisits = JSON.parse(fs.readFileSync(visitsFile, 'utf-8'));
+      const filtered = allVisits.filter(v => v.date >= from && v.date <= to);
+      return res.json(filtered.sort((a, b) => {
+        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        return a.timeStart.localeCompare(b.timeStart);
+      }));
+    }
+
+    // Production: MongoDB
+    const visits = await getVisits(from, to);
+    res.json(visits);
+  } catch (error) {
+    console.error('Error fetching visits:', error);
+    res.status(500).json({ error: 'Ошибка получения выездов' });
+  }
+});
+
+// POST /api/visits — создать выезд
+app.post('/api/visits', requireAuth, async (req, res) => {
+  try {
+    const { managerId, managerName, date, timeStart, timeEnd, type, schoolId, schoolName, notes } = req.body;
+
+    // Валидация
+    if (!managerId || !date || !timeStart || !timeEnd || !type || !schoolId || !schoolName) {
+      return res.status(400).json({ error: 'Не все обязательные поля заполнены' });
+    }
+
+    const visit = {
+      id: `visit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      managerId,
+      managerName: managerName || managerId,
+      date,
+      timeStart,
+      timeEnd,
+      type,
+      schoolId,
+      schoolName,
+      notes: notes || '',
+      createdAt: new Date().toISOString(),
+      createdBy: req.user?.id || 'unknown'
+    };
+
+    if (IS_SANDBOX) {
+      // Sandbox: file-based
+      const visitsFile = path.join(DATA_DIR, 'visits_sandbox.json');
+      let visits = [];
+      if (fs.existsSync(visitsFile)) {
+        visits = JSON.parse(fs.readFileSync(visitsFile, 'utf-8'));
+      }
+      visits.push(visit);
+      fs.writeFileSync(visitsFile, JSON.stringify(visits, null, 2), 'utf-8');
+      return res.json({ success: true, visit });
+    }
+
+    // Production: MongoDB
+    await createVisit(visit);
+    res.json({ success: true, visit });
+  } catch (error) {
+    console.error('Error creating visit:', error);
+    res.status(500).json({ error: 'Ошибка создания выезда' });
+  }
+});
+
+// PUT /api/visits/:id — обновить выезд
+app.put('/api/visits/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    // Запретить изменение id и createdAt
+    delete updates.id;
+    delete updates.createdAt;
+    delete updates.createdBy;
+
+    if (IS_SANDBOX) {
+      // Sandbox: file-based
+      const visitsFile = path.join(DATA_DIR, 'visits_sandbox.json');
+      if (!fs.existsSync(visitsFile)) {
+        return res.status(404).json({ error: 'Выезд не найден' });
+      }
+      let visits = JSON.parse(fs.readFileSync(visitsFile, 'utf-8'));
+      const index = visits.findIndex(v => v.id === id);
+      if (index === -1) {
+        return res.status(404).json({ error: 'Выезд не найден' });
+      }
+      visits[index] = { ...visits[index], ...updates };
+      fs.writeFileSync(visitsFile, JSON.stringify(visits, null, 2), 'utf-8');
+      return res.json({ success: true, visit: visits[index] });
+    }
+
+    // Production: MongoDB
+    const updated = await updateVisit(id, updates);
+    if (!updated) {
+      return res.status(404).json({ error: 'Выезд не найден' });
+    }
+    res.json({ success: true, visit: updated });
+  } catch (error) {
+    console.error('Error updating visit:', error);
+    res.status(500).json({ error: 'Ошибка обновления выезда' });
+  }
+});
+
+// DELETE /api/visits/:id — удалить выезд
+app.delete('/api/visits/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (IS_SANDBOX) {
+      // Sandbox: file-based
+      const visitsFile = path.join(DATA_DIR, 'visits_sandbox.json');
+      if (!fs.existsSync(visitsFile)) {
+        return res.status(404).json({ error: 'Выезд не найден' });
+      }
+      let visits = JSON.parse(fs.readFileSync(visitsFile, 'utf-8'));
+      const index = visits.findIndex(v => v.id === id);
+      if (index === -1) {
+        return res.status(404).json({ error: 'Выезд не найден' });
+      }
+      visits.splice(index, 1);
+      fs.writeFileSync(visitsFile, JSON.stringify(visits, null, 2), 'utf-8');
+      return res.json({ success: true });
+    }
+
+    // Production: MongoDB
+    const deleted = await deleteVisit(id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Выезд не найден' });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting visit:', error);
+    res.status(500).json({ error: 'Ошибка удаления выезда' });
+  }
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
+  res.json({
+    status: 'ok',
     mode: IS_SANDBOX ? 'sandbox' : 'production',
     timestamp: new Date().toISOString()
   });
@@ -1565,7 +1722,7 @@ async function startServer() {
     // Connect to MongoDB in production mode
     if (!IS_SANDBOX) {
       await connectDB();
-      
+
       // Startup deduplication for production
       const schools = await getAllSchools();
       const { schools: cleaned, duplicates } = dedupeSchoolsById(schools);
@@ -1589,12 +1746,12 @@ async function startServer() {
         console.error('⚠️ Ошибка дедупликации при старте:', e);
       }
     }
-    
+
     // Start Express server
     const server = app.listen(PORT, () => {
       const modeLabel = IS_SANDBOX ? '🧪 SANDBOX' : '🚀 PRODUCTION';
       console.log(`${modeLabel} API сервер запущен на http://localhost:${PORT}`);
-      
+
       if (IS_SANDBOX) {
         console.log(`📁 Данные хранятся в: ${SCHOOLS_FILE}`);
         console.log(`📦 Бэкапы в: ${BACKUPS_DIR}`);
