@@ -32,9 +32,9 @@ export const MANAGERS: { id: string; name: string; color: string }[] = [
   { id: 'egor', name: 'Egor', color: '#10B981' },
 ]
 
-// Временные слоты для выбора (с 9:00 до 19:00, шаг 30 минут)
+// Временные слоты для выбора (с 6:00 до 19:00, шаг 30 минут)
 export const TIME_SLOTS: string[] = []
-for (let h = 9; h <= 19; h++) {
+for (let h = 6; h <= 19; h++) {
   TIME_SLOTS.push(`${String(h).padStart(2, '0')}:00`)
   if (h < 19) {
     TIME_SLOTS.push(`${String(h).padStart(2, '0')}:30`)

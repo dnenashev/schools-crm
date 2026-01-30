@@ -1,0 +1,42 @@
+[
+  {
+    "id": "visit_1769521170016_e8a9l7",
+    "managerId": "egor",
+    "managerName": "Egor",
+    "date": "2026-02-04",
+    "timeStart": "10:00",
+    "timeEnd": "15:00",
+    "type": "director_meeting",
+    "schoolId": "738b17ed-8af8-4253-9df1-69276f79b2fc",
+    "schoolName": "МБОУ Нахабинская СОШ №2",
+    "notes": "",
+    "createdAt": "2026-01-27T13:39:30.016Z",
+    "createdBy": "dmitry"
+  },
+  {
+    "id": "visit_1769523842732_wykase",
+    "managerId": "egor",
+    "managerName": "Egor",
+    "date": "2026-01-28",
+    "timeStart": "10:00",
+    "timeEnd": "13:00",
+    "type": "director_meeting",
+    "schoolId": "5a09592a-b549-440a-81d6-de5d22f38abe",
+    "schoolName": "МБДОУ детский сад №4",
+    "notes": "",
+    "createdAt": "2026-01-27T14:24:02.732Z",
+    "createdBy": "dmitry"
+  },
+  {
+    "id": "visit_1769523863179_1429wk",
+    "managerId": "pati",
+    "managerName": "Pati",
+    "date": "2026-01-28",
+    "timeStart": "09:00",
+    "timeEnd": "17:00",
+    "type": "calls",
+    "notes": "",
+    "createdAt": "2026-01-27T14:24:23.179Z",
+    "createdBy": "dmitry"
+  }
+]

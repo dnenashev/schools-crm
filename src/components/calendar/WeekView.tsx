@@ -142,10 +142,10 @@ const WeekView = ({ monday, visits, onAddVisit, onEditVisit, onDeleteVisit }: We
     return result
   }, [visitsByDate])
 
-  // Временные слоты для отображения (только часы, без 30-минутных интервалов)
+  // Временные слоты для отображения (6:00–19:00, только часы)
   const timeSlots = useMemo(() => {
     const slots: string[] = []
-    for (let h = 9; h <= 18; h++) {
+    for (let h = 6; h <= 19; h++) {
       slots.push(`${String(h).padStart(2, '0')}:00`)
     }
     return slots
