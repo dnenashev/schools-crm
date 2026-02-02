@@ -508,6 +508,30 @@ app.post('/api/schools/:id/activity', requireAuth, async (req, res) => {
   }
 });
 
+// DELETE /api/schools/:id/activity/:activityId — удалить одну активность (только админ)
+app.delete('/api/schools/:id/activity/:activityId', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { id: schoolId, activityId } = req.params;
+    const schools = await readSchools();
+    const index = schools.findIndex(s => s.id === schoolId);
+    if (index === -1) {
+      return res.status(404).json({ error: 'Школа не найдена' });
+    }
+    const activities = schools[index].activities || [];
+    const activityIndex = activities.findIndex(a => a.id === activityId);
+    if (activityIndex === -1) {
+      return res.status(404).json({ error: 'Активность не найдена' });
+    }
+    activities.splice(activityIndex, 1);
+    schools[index].activities = activities;
+    await saveSchools(schools, req.user.id);
+    res.json({ success: true, message: 'Запись удалена' });
+  } catch (error) {
+    console.error('Error deleting activity:', error);
+    res.status(500).json({ error: 'Ошибка удаления записи' });
+  }
+});
+
 // PUT /api/schools/:id/status — быстрое обновление статуса (только админ)
 app.put('/api/schools/:id/status', requireAuth, requireAdmin, async (req, res) => {
   try {
@@ -1647,7 +1671,8 @@ app.post('/api/visits', requireAuth, async (req, res) => {
     if (!managerId || !date || !timeStart || !timeEnd || !type) {
       return res.status(400).json({ error: 'Не все обязательные поля заполнены' });
     }
-    if (type !== 'calls' && (!schoolId || !schoolName)) {
+    const noSchoolTypes = ['calls', 'spo_vo_lichki'];
+    if (!noSchoolTypes.includes(type) && (!schoolId || !schoolName)) {
       return res.status(400).json({ error: 'Для этого типа выезда нужно выбрать школу' });
     }
 
@@ -1659,7 +1684,7 @@ app.post('/api/visits', requireAuth, async (req, res) => {
       timeStart,
       timeEnd,
       type,
-      ...(type === 'calls' ? {} : { schoolId, schoolName }),
+      ...(noSchoolTypes.includes(type) ? {} : { schoolId, schoolName }),
       notes: notes || '',
       createdAt: new Date().toISOString(),
       createdBy: req.user?.id || 'unknown'

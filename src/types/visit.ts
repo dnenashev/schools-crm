@@ -1,5 +1,5 @@
 // Типы выездов менеджеров
-export type VisitType = 'director_meeting' | 'school_event' | 'campus_excursion' | 'calls'
+export type VisitType = 'director_meeting' | 'school_event' | 'campus_excursion' | 'calls' | 'spo_vo_lichki'
 
 // Выезд менеджера
 export interface Visit {
@@ -24,6 +24,7 @@ export const VISIT_TYPES: { value: VisitType; label: string; color: string }[] =
   { value: 'school_event', label: 'Мероприятие в школе', color: 'green' },
   { value: 'campus_excursion', label: 'Экскурсия на кампусе', color: 'purple' },
   { value: 'calls', label: 'Звонки', color: 'orange' },
+  { value: 'spo_vo_lichki', label: 'Работа по СПО/ВО и Лички', color: 'teal' },
 ]
 
 // Менеджеры

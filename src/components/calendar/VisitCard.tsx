@@ -32,6 +32,12 @@ const TypeIcon = ({ type }: { type: string }) => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.95.68l1.5 4.5a1 1 0 01-.5 1.21l-2.2 1.1a11.04 11.04 0 005.52 5.52l1.1-2.2a1 1 0 011.21-.5l4.5 1.5a1 1 0 01.68.95V19a2 2 0 01-2 2h-1C9.82 21 3 14.18 3 6V5z" />
         </svg>
       )
+    case 'spo_vo_lichki':
+      return (
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      )
     default:
       return null
   }
@@ -48,6 +54,7 @@ const VisitCard = ({ visit, onDelete: _onDelete }: VisitCardProps) => {
     green: 'bg-green-50',
     purple: 'bg-purple-50',
     orange: 'bg-orange-50',
+    teal: 'bg-teal-50',
     gray: 'bg-gray-50'
   }
 
@@ -57,6 +64,7 @@ const VisitCard = ({ visit, onDelete: _onDelete }: VisitCardProps) => {
     green: 'text-green-700',
     purple: 'text-purple-700',
     orange: 'text-orange-700',
+    teal: 'text-teal-700',
     gray: 'text-gray-700'
   }
 

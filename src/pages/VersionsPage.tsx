@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useApiUrl, authenticatedFetch } from '../config/api'
 import { useAuth } from '../components/AuthProvider'
+import type { Activity } from '../types/school'
+
+const UNKNOWN_SCHOOL_ID = '__unknown_school__'
 
 interface VersionInfo {
   filename?: string
@@ -13,19 +16,50 @@ interface VersionInfo {
   userName: string | null
 }
 
+// Только внесения воронки/метрик без школы (для истории записей)
+const isRecordActivity = (a: Activity) =>
+  a.type === 'funnel_metrics' || a.type === 'numeric_metrics'
+
+const recordTypeLabel = (type: Activity['type']): string => {
+  if (type === 'funnel_metrics') return 'Воронка (количеством)'
+  if (type === 'numeric_metrics') return 'Метрики'
+  return type
+}
+
+const formatRecordDate = (dateStr: string): string => {
+  if (!dateStr || dateStr.length < 10) return dateStr
+  const [y, m, d] = dateStr.slice(0, 10).split('-')
+  return `${d}.${m}.${y}`
+}
+
 const VersionsPage = () => {
+  const [recordActivities, setRecordActivities] = useState<Activity[]>([])
   const [versions, setVersions] = useState<VersionInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [restoring, setRestoring] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<number | null>(null)
+  const [deletingActivityId, setDeletingActivityId] = useState<string | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [confirmRestore, setConfirmRestore] = useState<string | null>(null)
   const API_URL = useApiUrl()
   const { isAdmin } = useAuth()
 
-  // Загрузка данных
-  const loadData = async () => {
-    setLoading(true)
+  const loadSchools = async () => {
+    try {
+      const res = await fetch(`${API_URL}/schools`)
+      const schools: { id: string; activities?: Activity[] }[] = await res.json()
+      const unknown = schools.find(s => s.id === UNKNOWN_SCHOOL_ID)
+      const activities = (unknown?.activities || [])
+        .filter(isRecordActivity)
+        .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+      setRecordActivities(activities)
+    } catch (e) {
+      console.error('Error loading schools:', e)
+      setRecordActivities([])
+    }
+  }
+
+  const loadVersions = async () => {
     try {
       const versionsRes = await fetch(`${API_URL}/versions`)
       const versionsData: VersionInfo[] = await versionsRes.json()
@@ -33,16 +67,46 @@ const VersionsPage = () => {
     } catch (error) {
       console.error('Error loading versions:', error)
       setMessage({ type: 'error', text: 'Ошибка загрузки версий. Убедитесь, что сервер запущен.' })
-    } finally {
-      setLoading(false)
     }
+  }
+
+  const loadData = async () => {
+    setLoading(true)
+    setMessage(null)
+    await Promise.all([loadSchools(), loadVersions()])
+    setLoading(false)
   }
 
   useEffect(() => {
     loadData()
   }, [API_URL])
 
-  // Удаление последних N записей
+  // Удаление одной записи (активности «без школы»)
+  const handleDeleteActivity = async (activityId: string) => {
+    if (!isAdmin) return
+    setDeletingActivityId(activityId)
+    setMessage(null)
+    try {
+      const response = await authenticatedFetch(
+        `${API_URL}/schools/${UNKNOWN_SCHOOL_ID}/activity/${activityId}`,
+        { method: 'DELETE' }
+      )
+      const result = await response.json()
+      if (result.success) {
+        setMessage({ type: 'success', text: result.message || 'Запись удалена' })
+        await loadSchools()
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Ошибка удаления' })
+      }
+    } catch (error) {
+      console.error('Error deleting activity:', error)
+      setMessage({ type: 'error', text: 'Ошибка удаления записи' })
+    } finally {
+      setDeletingActivityId(null)
+    }
+  }
+
+  // Удаление последних N резервных копий
   const handleDeleteLast = async (count: number) => {
     if (!isAdmin) {
       setMessage({ type: 'error', text: 'Удаление записей доступно только администраторам' })
@@ -137,32 +201,9 @@ const VersionsPage = () => {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">История записей</h1>
           <p className="text-gray-600 mt-2">
-            Здесь можно просмотреть все сохранённые версии данных, восстановить любую из них или удалить последние записи.
+            Внесения воронки и метрик без привязки к школе. Ниже — резервные копии данных.
           </p>
         </div>
-
-        {/* Удаление последних записей (только админ) */}
-        {isAdmin && versions.length > 0 && (
-          <div className="mb-6 p-4 bg-white rounded-lg shadow border border-gray-200">
-            <h2 className="text-sm font-semibold text-gray-700 mb-2">Удалить последние записи</h2>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => handleDeleteLast(1)}
-                disabled={deleting !== null}
-                className="px-3 py-1.5 text-sm bg-amber-100 text-amber-800 rounded-lg hover:bg-amber-200 disabled:opacity-50 transition-colors"
-              >
-                {deleting === 1 ? 'Удаление...' : 'Удалить последнюю запись'}
-              </button>
-              <button
-                onClick={() => handleDeleteLast(5)}
-                disabled={deleting !== null}
-                className="px-3 py-1.5 text-sm bg-amber-100 text-amber-800 rounded-lg hover:bg-amber-200 disabled:opacity-50 transition-colors"
-              >
-                {deleting === 5 ? 'Удаление...' : 'Удалить последние 5 записей'}
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Сообщение */}
         {message && (
@@ -175,12 +216,79 @@ const VersionsPage = () => {
           </div>
         )}
 
-        {/* Список версий */}
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        {/* Записи воронки и метрик (без школы) */}
+        <div className="bg-white rounded-lg shadow-md overflow-hidden mb-8">
           <div className="px-6 py-4 bg-gray-100 border-b">
+            <h2 className="font-semibold text-gray-900">
+              Записи (воронка и метрики без школы) — {recordActivities.length}
+            </h2>
+          </div>
+          {recordActivities.length === 0 ? (
+            <div className="px-6 py-8 text-center text-gray-500">
+              Нет записей воронки или метрик без привязки к школе.
+            </div>
+          ) : (
+            <ul className="divide-y divide-gray-200">
+              {recordActivities.map((activity) => (
+                <li key={activity.id} className="px-6 py-4 hover:bg-gray-50 flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-gray-900">
+                      {recordTypeLabel(activity.type)}
+                    </p>
+                    <p className="text-sm text-gray-600 mt-0.5">
+                      {formatRecordDate(activity.date)}
+                      {(activity.createdByName || activity.createdBy) && (
+                        <span> • {activity.createdByName || activity.createdBy}</span>
+                      )}
+                    </p>
+                    <p className="text-sm text-gray-500 mt-1 break-words">
+                      {activity.description || (activity.metrics && (
+                        `Метрики: ${Object.entries(activity.metrics)
+                          .map(([k, v]) => `${k}: ${v}`)
+                          .join(', ')}`
+                      ))}
+                    </p>
+                  </div>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteActivity(activity.id)}
+                      disabled={deletingActivityId !== null}
+                      className="shrink-0 px-3 py-1.5 text-sm font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 disabled:opacity-50"
+                    >
+                      {deletingActivityId === activity.id ? 'Удаление...' : 'Удалить'}
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Резервные копии */}
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          <div className="px-6 py-4 bg-gray-100 border-b flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-semibold text-gray-900">
               Резервные копии ({versions.length})
             </h2>
+            {isAdmin && versions.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => handleDeleteLast(1)}
+                  disabled={deleting !== null}
+                  className="px-3 py-1.5 text-sm bg-amber-100 text-amber-800 rounded-lg hover:bg-amber-200 disabled:opacity-50"
+                >
+                  {deleting === 1 ? '...' : 'Удалить последнюю копию'}
+                </button>
+                <button
+                  onClick={() => handleDeleteLast(5)}
+                  disabled={deleting !== null}
+                  className="px-3 py-1.5 text-sm bg-amber-100 text-amber-800 rounded-lg hover:bg-amber-200 disabled:opacity-50"
+                >
+                  {deleting === 5 ? '...' : 'Удалить последние 5'}
+                </button>
+              </div>
+            )}
           </div>
 
           {versions.length === 0 ? (
@@ -256,10 +364,9 @@ const VersionsPage = () => {
         <div className="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
           <h3 className="font-medium text-yellow-800 mb-2">Как это работает:</h3>
           <ul className="text-sm text-yellow-700 space-y-1">
-            <li>При каждом сохранении данных автоматически создаётся резервная копия</li>
-            <li>Хранятся последние 50 версий</li>
-            <li>При восстановлении текущие данные также сохраняются в бэкап</li>
-            <li>Восстановление безопасно — вы всегда можете откатить обратно</li>
+            <li><strong>Записи</strong> — внесения воронки и метрик «без школы». Можно удалить конкретную запись кнопкой «Удалить».</li>
+            <li><strong>Резервные копии</strong> — создаются при сохранении данных; хранятся последние 50 версий.</li>
+            <li>Восстановление копии безопасно — текущие данные сохраняются в бэкап перед откатом.</li>
           </ul>
         </div>
       </div>

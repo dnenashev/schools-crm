@@ -89,11 +89,11 @@ const AddVisitModal = ({ visit, prefilledDate, prefilledTime, onClose, onSave }:
     setShowSchoolDropdown(false)
   }
 
-  // Валидация
+  // Валидация (для calls и spo_vo_lichki школа не обязательна)
   const isValid = useMemo(() => {
     const baseOk = Boolean(managerId && date && timeStart && timeEnd && type)
     if (!baseOk) return false
-    if (type === 'calls') return true
+    if (type === 'calls' || type === 'spo_vo_lichki') return true
     return Boolean(schoolId && schoolName)
   }, [managerId, date, timeStart, timeEnd, type, schoolId, schoolName])
 
@@ -278,8 +278,8 @@ const AddVisitModal = ({ visit, prefilledDate, prefilledTime, onClose, onSave }:
             </div>
           </div>
 
-          {/* Школа */}
-          {type !== 'calls' && (
+          {/* Школа (для звонков и СПО/ВО и Лички не обязательна) */}
+          {type !== 'calls' && type !== 'spo_vo_lichki' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Школа</label>
               <div className="relative">
