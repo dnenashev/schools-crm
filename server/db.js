@@ -335,6 +335,26 @@ export async function restoreVersion(timestamp) {
   return version.data;
 }
 
+/**
+ * Delete the N most recent versions (by createdAt)
+ * @param {number} count - Number of versions to delete (1–100)
+ * @returns {Promise<{ deleted: number }>}
+ */
+export async function deleteLastVersions(count) {
+  const limit = Math.min(Math.max(1, count), 100);
+  const collection = getDB().collection('versions');
+  const toDelete = await collection
+    .find({})
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .toArray();
+  if (toDelete.length === 0) {
+    return { deleted: 0 };
+  }
+  await collection.deleteMany({ _id: { $in: toDelete.map((v) => v._id) } });
+  return { deleted: toDelete.length };
+}
+
 // ==================== VISITS (CALENDAR) ====================
 
 /**

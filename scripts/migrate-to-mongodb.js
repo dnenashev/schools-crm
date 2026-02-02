@@ -13,9 +13,13 @@
 
 import { MongoClient } from 'mongodb';
 import bcrypt from 'bcryptjs';
+import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+// Load .env from project root (when run via npm script, cwd is project root)
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

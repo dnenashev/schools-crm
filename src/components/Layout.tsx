@@ -18,7 +18,7 @@ const Layout = ({ children }: LayoutProps) => {
     { path: '/pipeline', label: 'Пайплайн' },
     { path: '/calendar', label: 'Календарь' },
     { path: '/schools', label: 'Школы' },
-    { path: '/versions', label: 'Версии', adminOnly: true },
+    { path: '/versions', label: 'История записей', adminOnly: true },
   ]
 
   // Фильтруем ссылки для менеджеров (скрываем админские)

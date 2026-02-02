@@ -52,6 +52,7 @@ FILES_TO_STAGE = [
     "src/components/calendar/AddVisitModal.tsx",
     "src/pages/SchoolsPage.tsx",
     "src/pages/CalendarPage.tsx",
+    "src/pages/VersionsPage.tsx",
     "src/components/pipeline/FillDataMode.tsx",
     "src/components/pipeline/FunnelSelector.tsx",
     "src/components/pipeline/NumericMetricsDistribution.tsx",

@@ -4,10 +4,11 @@ import { useApiUrl, authenticatedFetch } from '../config/api'
 import { useAuth } from '../components/AuthProvider'
 
 interface VersionInfo {
-  filename: string
+  filename?: string
   timestamp: string
   displayDate: string
-  size: number
+  size?: number
+  schoolsCount?: number
   userId: string | null
   userName: string | null
 }
@@ -16,6 +17,7 @@ const VersionsPage = () => {
   const [versions, setVersions] = useState<VersionInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [restoring, setRestoring] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<number | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [confirmRestore, setConfirmRestore] = useState<string | null>(null)
   const API_URL = useApiUrl()
@@ -40,23 +42,50 @@ const VersionsPage = () => {
     loadData()
   }, [API_URL])
 
+  // Удаление последних N записей
+  const handleDeleteLast = async (count: number) => {
+    if (!isAdmin) {
+      setMessage({ type: 'error', text: 'Удаление записей доступно только администраторам' })
+      return
+    }
+    setDeleting(count)
+    setMessage(null)
+    try {
+      const response = await authenticatedFetch(`${API_URL}/versions/last?count=${count}`, {
+        method: 'DELETE'
+      })
+      const result = await response.json()
+      if (result.success) {
+        setMessage({ type: 'success', text: result.message || `Удалено записей: ${result.deleted}` })
+        await loadData()
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Ошибка удаления' })
+      }
+    } catch (error) {
+      console.error('Error deleting last versions:', error)
+      setMessage({ type: 'error', text: 'Ошибка удаления записей' })
+    } finally {
+      setDeleting(null)
+    }
+  }
+
   // Восстановление версии
   const handleRestore = async (version: string) => {
     if (!isAdmin) {
       setMessage({ type: 'error', text: 'Восстановление версий доступно только администраторам' })
       return
     }
-    
+
     setRestoring(version)
     setMessage(null)
-    
+
     try {
       const response = await authenticatedFetch(`${API_URL}/restore/${version}`, {
         method: 'POST'
       })
-      
+
       const result = await response.json()
-      
+
       if (result.success) {
         setMessage({ type: 'success', text: result.message })
         setConfirmRestore(null)
@@ -93,8 +122,8 @@ const VersionsPage = () => {
       <div className="container mx-auto px-4 py-8">
         {/* Навигация */}
         <div className="mb-6 flex items-center justify-between">
-          <Link 
-            to="/" 
+          <Link
+            to="/"
             className="inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors"
           >
             <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -106,17 +135,40 @@ const VersionsPage = () => {
 
         {/* Заголовок */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">История версий</h1>
+          <h1 className="text-3xl font-bold text-gray-900">История записей</h1>
           <p className="text-gray-600 mt-2">
-            Здесь можно просмотреть все сохранённые версии данных и восстановить любую из них.
+            Здесь можно просмотреть все сохранённые версии данных, восстановить любую из них или удалить последние записи.
           </p>
         </div>
+
+        {/* Удаление последних записей (только админ) */}
+        {isAdmin && versions.length > 0 && (
+          <div className="mb-6 p-4 bg-white rounded-lg shadow border border-gray-200">
+            <h2 className="text-sm font-semibold text-gray-700 mb-2">Удалить последние записи</h2>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => handleDeleteLast(1)}
+                disabled={deleting !== null}
+                className="px-3 py-1.5 text-sm bg-amber-100 text-amber-800 rounded-lg hover:bg-amber-200 disabled:opacity-50 transition-colors"
+              >
+                {deleting === 1 ? 'Удаление...' : 'Удалить последнюю запись'}
+              </button>
+              <button
+                onClick={() => handleDeleteLast(5)}
+                disabled={deleting !== null}
+                className="px-3 py-1.5 text-sm bg-amber-100 text-amber-800 rounded-lg hover:bg-amber-200 disabled:opacity-50 transition-colors"
+              >
+                {deleting === 5 ? 'Удаление...' : 'Удалить последние 5 записей'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Сообщение */}
         {message && (
           <div className={`mb-4 p-4 rounded-lg ${
-            message.type === 'success' 
-              ? 'bg-green-100 text-green-800 border border-green-200' 
+            message.type === 'success'
+              ? 'bg-green-100 text-green-800 border border-green-200'
               : 'bg-red-100 text-red-800 border border-red-200'
           }`}>
             {message.text}
@@ -130,7 +182,7 @@ const VersionsPage = () => {
               Резервные копии ({versions.length})
             </h2>
           </div>
-          
+
           {versions.length === 0 ? (
             <div className="px-6 py-12 text-center text-gray-500">
               Пока нет сохранённых версий. Версии создаются автоматически при сохранении данных.
@@ -138,25 +190,28 @@ const VersionsPage = () => {
           ) : (
             <ul className="divide-y divide-gray-200">
               {versions.map((version) => (
-                <li key={version.filename} className="px-6 py-4 hover:bg-gray-50">
+                <li key={version.timestamp} className="px-6 py-4 hover:bg-gray-50">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium text-gray-900">
                         {version.displayDate}
                       </p>
                       <p className="text-sm text-gray-500">
-                        Размер: {formatSize(version.size)}
+                        {version.size != null && `Размер: ${formatSize(version.size)}`}
+                        {version.schoolsCount != null && `Школ: ${version.schoolsCount}`}
                         {version.userName && (
                           <span className="ml-2">
                             | Автор: <span className="font-medium">{version.userName}</span>
                           </span>
                         )}
                       </p>
-                      <p className="text-xs text-gray-400 font-mono mt-1">
-                        {version.filename}
-                      </p>
+                      {version.filename && (
+                        <p className="text-xs text-gray-400 font-mono mt-1">
+                          {version.filename}
+                        </p>
+                      )}
                     </div>
-                    
+
                     <div>
                       {isAdmin ? (
                         confirmRestore === version.timestamp ? (

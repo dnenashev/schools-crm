@@ -22,6 +22,7 @@ import {
   getAllVersions,
   getVersionByTimestamp,
   restoreVersion,
+  deleteLastVersions,
   getVisits,
   getVisitById,
   createVisit,
@@ -665,6 +666,36 @@ app.post('/api/restore/:version', requireAuth, requireAdmin, async (req, res) =>
   } catch (error) {
     console.error('Error restoring version:', error);
     res.status(500).json({ error: 'Ошибка восстановления версии' });
+  }
+});
+
+// DELETE /api/versions/last?count=N — удалить последние N записей (только админ)
+app.delete('/api/versions/last', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const count = Math.min(Math.max(1, parseInt(req.query.count, 10) || 1), 100);
+
+    if (IS_SANDBOX) {
+      const prefix = 'sandbox_';
+      const backupFiles = fs.readdirSync(BACKUPS_DIR)
+        .filter(f => f.startsWith(prefix) && f.endsWith('.json') && !f.includes('last_backup_meta'))
+        .map(filename => ({
+          filename,
+          mtime: fs.statSync(path.join(BACKUPS_DIR, filename)).mtime
+        }))
+        .sort((a, b) => b.mtime - a.mtime)
+        .slice(0, count);
+
+      for (const { filename } of backupFiles) {
+        fs.unlinkSync(path.join(BACKUPS_DIR, filename));
+      }
+      return res.json({ success: true, deleted: backupFiles.length, message: `Удалено записей: ${backupFiles.length}` });
+    }
+
+    const { deleted } = await deleteLastVersions(count);
+    res.json({ success: true, deleted, message: `Удалено записей: ${deleted}` });
+  } catch (error) {
+    console.error('Error deleting last versions:', error);
+    res.status(500).json({ error: 'Ошибка удаления записей' });
   }
 });
 
