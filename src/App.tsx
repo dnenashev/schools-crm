@@ -8,6 +8,7 @@ import SchoolsPage from './pages/SchoolsPage'
 import VersionsPage from './pages/VersionsPage'
 import PipelinePage from './pages/PipelinePage'
 import CalendarPage from './pages/CalendarPage'
+import PhotoLeadsPage from './pages/PhotoLeadsPage'
 import { ReactNode } from 'react'
 
 // Компонент для защищённых маршрутов
@@ -87,7 +88,14 @@ function AppRoutes() {
           </Layout>
         </ProtectedRoute>
       } />
-    </Routes>
+      <Route path="/photo-leads" element={
+        <ProtectedRoute>
+          <Layout>
+            <PhotoLeadsPage />
+          </Layout>
+        </ProtectedRoute>
+      } />
+      </Routes>
   )
 }
 

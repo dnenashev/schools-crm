@@ -27,8 +27,14 @@ import {
   getVisitById,
   createVisit,
   updateVisit,
-  deleteVisit
+  deleteVisit,
+  getPaperLeads,
+  insertPaperLead,
+  updatePaperLead,
 } from './db.js';
+import { getLeadById, parseLeadIdFromLink, isAmoConfigured, createContact, createLead, addNoteToLead } from './amo.js';
+import { getCutoffDate, getDateFieldForStatus } from './amo-stages-config.js';
+import { processImageOcr } from './ocr.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -720,6 +726,61 @@ app.delete('/api/versions/last', requireAuth, requireAdmin, async (req, res) => 
   } catch (error) {
     console.error('Error deleting last versions:', error);
     res.status(500).json({ error: 'Ошибка удаления записей' });
+  }
+});
+
+// POST /api/sync-amo-stages — синхронизация этапов сделок Amo в поля школ (только админ)
+app.post('/api/sync-amo-stages', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    if (!isAmoConfigured()) {
+      return res.status(400).json({ error: 'Amo CRM не настроен (AMO_DOMAIN, AMO_ACCESS_TOKEN)' });
+    }
+    const CUTOFF = getCutoffDate();
+    const dateFromTs = (ts) => (ts == null ? null : new Date(ts * 1000).toISOString().slice(0, 10));
+    const shouldWrite = (newDate, current) => {
+      if (!newDate || newDate < CUTOFF) return false;
+      if (current != null && current !== '' && current < CUTOFF) return false;
+      return true;
+    };
+
+    let schools = await readSchools();
+    const withLink = schools.filter((s) => s.amoLink && s.amoLink.trim());
+    const today = new Date().toISOString().slice(0, 10);
+    let updated = 0;
+
+    for (const school of withLink) {
+      const leadId = parseLeadIdFromLink(school.amoLink);
+      if (leadId == null) continue;
+      const lead = await getLeadById(leadId);
+      if (!lead) continue;
+      const dateField = getDateFieldForStatus(lead.status_id);
+      if (!dateField) continue;
+      const newDate = dateFromTs(lead.updated_at) || today;
+      const currentValue = school[dateField] ?? null;
+      if (!shouldWrite(newDate, currentValue)) continue;
+
+      if (IS_SANDBOX) {
+        const idx = schools.findIndex((s) => s.id === school.id);
+        if (idx >= 0) {
+          schools[idx] = { ...schools[idx], [dateField]: newDate };
+          updated++;
+        }
+      } else {
+        const result = await updateSchool(school.id, { [dateField]: newDate });
+        if (result) updated++;
+      }
+    }
+
+    if (IS_SANDBOX && updated > 0) {
+      const { schools: deduped } = dedupeSchoolsById(schools);
+      createBackupLocal(req.user?.id);
+      fs.writeFileSync(SCHOOLS_FILE, JSON.stringify(deduped, null, 2), 'utf-8');
+    }
+
+    res.json({ success: true, updated, message: `Обновлено школ: ${updated}` });
+  } catch (error) {
+    console.error('Error syncing Amo stages:', error);
+    res.status(500).json({ error: 'Ошибка синхронизации этапов Amo' });
   }
 });
 
@@ -1780,6 +1841,121 @@ app.delete('/api/visits/:id', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Error deleting visit:', error);
     res.status(500).json({ error: 'Ошибка удаления выезда' });
+  }
+});
+
+// ==================== PAPER LEADS (photo / OCR) ====================
+
+// POST /api/paper-leads/upload — OCR image, return extracted data (no save)
+app.post('/api/paper-leads/upload', requireAuth, async (req, res) => {
+  try {
+    const { image, application_type } = req.body || {};
+    if (!image || typeof image !== 'string') {
+      return res.status(400).json({ error: 'Требуется поле image (base64)' });
+    }
+    const base64 = image.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64, 'base64');
+    const ocrResult = await processImageOcr(buffer, 'upload.jpg');
+    res.json({
+      success: true,
+      data: {
+        fio: ocrResult.fio,
+        school: ocrResult.school,
+        class: ocrResult.class,
+        phone: ocrResult.phone,
+        parent_name: ocrResult.parent_name,
+        parent_phone: ocrResult.parent_phone,
+      },
+      application_type: application_type || '',
+    });
+  } catch (error) {
+    console.error('Paper leads upload OCR error:', error);
+    res.status(500).json({ error: error.message || 'Ошибка распознавания изображения' });
+  }
+});
+
+// POST /api/paper-leads — save lead after edit
+app.post('/api/paper-leads', requireAuth, async (req, res) => {
+  try {
+    await connectDB();
+    const { fio, school, class: studentClass, phone, application_type, parent_name, parent_phone, image_paths, ocr_raw } = req.body || {};
+    const { id } = await insertPaperLead({
+      fio: fio ?? '',
+      school: school ?? '',
+      class: studentClass ?? '',
+      phone: phone ?? '',
+      application_type: application_type ?? '',
+      parent_name: parent_name || null,
+      parent_phone: parent_phone || null,
+      image_paths: Array.isArray(image_paths) ? image_paths : [],
+      ocr_raw: ocr_raw ?? null,
+    });
+    res.json({ success: true, id });
+  } catch (error) {
+    console.error('Paper leads save error:', error);
+    res.status(500).json({ error: error.message || 'Ошибка сохранения' });
+  }
+});
+
+// GET /api/paper-leads — list
+app.get('/api/paper-leads', requireAuth, async (req, res) => {
+  try {
+    await connectDB();
+    const limit = Math.min(parseInt(req.query.limit, 10) || 100, 200);
+    const skip = parseInt(req.query.skip, 10) || 0;
+    const sentOnly = req.query.sent === 'true' ? true : req.query.sent === 'false' ? false : undefined;
+    const list = await getPaperLeads({ limit, skip, sentOnly });
+    res.json(list);
+  } catch (error) {
+    console.error('Paper leads list error:', error);
+    res.status(500).json({ error: error.message || 'Ошибка загрузки списка' });
+  }
+});
+
+// POST /api/paper-leads/send-to-amo — send selected or all unsent to Amo
+app.post('/api/paper-leads/send-to-amo', requireAuth, async (req, res) => {
+  try {
+    await connectDB();
+    if (!isAmoConfigured()) {
+      return res.status(400).json({ error: 'Amo CRM не настроен' });
+    }
+    const { ids } = req.body || {};
+    const list = Array.isArray(ids) && ids.length > 0
+      ? (await getPaperLeads({ limit: 500 })).filter((l) => ids.includes(l.id))
+      : (await getPaperLeads({ limit: 100, sentOnly: false })).filter((l) => !l.sent_to_amo);
+    const results = { success: [], failed: [] };
+    for (const lead of list) {
+      try {
+        const contactId = await createContact(lead.fio, lead.phone);
+        if (!contactId) {
+          results.failed.push({ id: lead.id, fio: lead.fio, error: 'Не удалось создать контакт' });
+          continue;
+        }
+        let parentContactId = null;
+        if (lead.parent_name && lead.parent_phone) {
+          parentContactId = await createContact(lead.parent_name, lead.parent_phone);
+        }
+        const leadId = await createLead(contactId, lead.application_type || '', parentContactId);
+        if (!leadId) {
+          results.failed.push({ id: lead.id, fio: lead.fio, error: 'Не удалось создать сделку' });
+          continue;
+        }
+        const noteText = `Тип: ${lead.application_type || '-'}\nШкола: ${lead.school || '-'}\nКласс: ${lead.class || '-'}\nТелефон: ${lead.phone || '-'}${lead.parent_name && lead.parent_phone ? `\nРодитель: ${lead.parent_name}\nТел. родителя: ${lead.parent_phone}` : ''}\nДата заявки: ${lead.created_at || '-'}`;
+        await addNoteToLead(leadId, noteText);
+        await updatePaperLead(lead.id, {
+          sent_to_amo: true,
+          amo_contact_id: String(contactId),
+          amo_lead_id: String(leadId),
+        });
+        results.success.push({ id: lead.id, fio: lead.fio, amo_lead_id: leadId });
+      } catch (err) {
+        results.failed.push({ id: lead.id, fio: lead.fio, error: err.message || String(err) });
+      }
+    }
+    res.json({ success: true, ...results });
+  } catch (error) {
+    console.error('Paper leads send-to-amo error:', error);
+    res.status(500).json({ error: error.message || 'Ошибка отправки в АМО' });
   }
 });
 

@@ -86,6 +86,12 @@ async function createIndexes() {
     await visitsCollection.createIndex({ managerId: 1 });
     await visitsCollection.createIndex({ date: 1, managerId: 1 });
 
+    // Paper leads (photo/OCR leads)
+    const paperLeadsCollection = db.collection('paper_leads');
+    await paperLeadsCollection.createIndex({ id: 1 }, { unique: true });
+    await paperLeadsCollection.createIndex({ created_at: -1 });
+    await paperLeadsCollection.createIndex({ sent_to_amo: 1 });
+
     console.log('✅ MongoDB indexes created');
   } catch (error) {
     console.warn('⚠️ Error creating indexes:', error.message);
@@ -420,4 +426,59 @@ export async function deleteVisit(visitId) {
   const collection = getDB().collection('visits');
   const result = await collection.deleteOne({ id: visitId });
   return result.deletedCount > 0;
+}
+
+// ==================== PAPER LEADS (OCR / photo leads) ====================
+
+/**
+ * Get all paper leads (for photo leads pipeline).
+ * @param {{ limit?: number, skip?: number, sentOnly?: boolean }} [options]
+ * @returns {Promise<Array>}
+ */
+export async function getPaperLeads(options = {}) {
+  const { limit = 200, skip = 0, sentOnly } = options;
+  const collection = getDB().collection('paper_leads');
+  let cursor = collection.find(sentOnly === true ? { sent_to_amo: true } : sentOnly === false ? { sent_to_amo: false } : {});
+  cursor = cursor.sort({ created_at: -1 }).skip(skip).limit(limit);
+  return cursor.project({ _id: 0 }).toArray();
+}
+
+/**
+ * Insert a paper lead.
+ * @param {Object} doc
+ * @returns {Promise<{ id: string }>}
+ */
+export async function insertPaperLead(doc) {
+  const collection = getDB().collection('paper_leads');
+  const id = `plead_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  const toInsert = {
+    id,
+    fio: doc.fio ?? '',
+    school: doc.school ?? '',
+    class: doc.class ?? '',
+    phone: doc.phone ?? '',
+    application_type: doc.application_type ?? '',
+    parent_name: doc.parent_name ?? null,
+    parent_phone: doc.parent_phone ?? null,
+    image_paths: Array.isArray(doc.image_paths) ? doc.image_paths : [],
+    sent_to_amo: false,
+    amo_contact_id: null,
+    amo_lead_id: null,
+    created_at: new Date().toISOString(),
+    ocr_raw: doc.ocr_raw ?? null,
+  };
+  await collection.insertOne(toInsert);
+  return { id };
+}
+
+/**
+ * Update paper lead (e.g. after sending to Amo).
+ * @param {string} id
+ * @param {Object} updates
+ * @returns {Promise<boolean>}
+ */
+export async function updatePaperLead(id, updates) {
+  const collection = getDB().collection('paper_leads');
+  const result = await collection.updateOne({ id }, { $set: updates });
+  return result.modifiedCount > 0 || result.matchedCount > 0;
 }

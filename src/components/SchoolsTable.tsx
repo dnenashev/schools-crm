@@ -240,7 +240,13 @@ const SchoolsTable = ({ schools, title, subtitle, onUpdate }: SchoolsTableProps)
                   <tr 
                     key={school.id} 
                     className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors cursor-pointer`}
-                    onClick={() => setSelectedSchool(school)}
+                    onClick={() => {
+                      if (school.amoLink) {
+                        window.open(school.amoLink, '_blank')
+                      } else {
+                        setSelectedSchool(school)
+                      }
+                    }}
                   >
                     <td className="px-4 py-3 text-sm text-gray-900">
                       <div className="font-medium">{school.name}</div>
@@ -273,7 +279,15 @@ const SchoolsTable = ({ schools, title, subtitle, onUpdate }: SchoolsTableProps)
                       )
                     })}
                     <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedSchool(school)}
+                          className="px-2 py-1 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+                          title="Открыть карточку школы"
+                        >
+                          Карточка
+                        </button>
                         {school.uchiLink && (
                           <a 
                             href={school.uchiLink} 

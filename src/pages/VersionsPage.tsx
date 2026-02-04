@@ -16,7 +16,7 @@ interface VersionInfo {
   userName: string | null
 }
 
-// Только внесения воронки/метрик без школы (для истории записей)
+// Внесения воронки/метрик (показываем по всем школам, не только без школы)
 const isRecordActivity = (a: Activity) =>
   a.type === 'funnel_metrics' || a.type === 'numeric_metrics'
 
@@ -32,8 +32,15 @@ const formatRecordDate = (dateStr: string): string => {
   return `${d}.${m}.${y}`
 }
 
+export interface RecordActivityItem {
+  schoolId: string
+  schoolName: string
+  activity: Activity
+}
+
 const VersionsPage = () => {
-  const [recordActivities, setRecordActivities] = useState<Activity[]>([])
+  const [recordItems, setRecordItems] = useState<RecordActivityItem[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
   const [versions, setVersions] = useState<VersionInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [restoring, setRestoring] = useState<string | null>(null)
@@ -47,15 +54,20 @@ const VersionsPage = () => {
   const loadSchools = async () => {
     try {
       const res = await fetch(`${API_URL}/schools`)
-      const schools: { id: string; activities?: Activity[] }[] = await res.json()
-      const unknown = schools.find(s => s.id === UNKNOWN_SCHOOL_ID)
-      const activities = (unknown?.activities || [])
-        .filter(isRecordActivity)
-        .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
-      setRecordActivities(activities)
+      const schools: { id: string; name?: string; activities?: Activity[] }[] = await res.json()
+      const items: RecordActivityItem[] = []
+      for (const school of schools) {
+        const activities = (school.activities || []).filter(isRecordActivity)
+        const schoolName = school.id === UNKNOWN_SCHOOL_ID ? 'Без школы' : (school.name || school.id)
+        for (const activity of activities) {
+          items.push({ schoolId: school.id, schoolName, activity })
+        }
+      }
+      items.sort((a, b) => (b.activity.date || '').localeCompare(a.activity.date || ''))
+      setRecordItems(items)
     } catch (e) {
       console.error('Error loading schools:', e)
-      setRecordActivities([])
+      setRecordItems([])
     }
   }
 
@@ -81,14 +93,14 @@ const VersionsPage = () => {
     loadData()
   }, [API_URL])
 
-  // Удаление одной записи (активности «без школы»)
-  const handleDeleteActivity = async (activityId: string) => {
+  // Удаление одной записи (активности любой школы)
+  const handleDeleteActivity = async (schoolId: string, activityId: string) => {
     if (!isAdmin) return
     setDeletingActivityId(activityId)
     setMessage(null)
     try {
       const response = await authenticatedFetch(
-        `${API_URL}/schools/${UNKNOWN_SCHOOL_ID}/activity/${activityId}`,
+        `${API_URL}/schools/${encodeURIComponent(schoolId)}/activity/${activityId}`,
         { method: 'DELETE' }
       )
       const result = await response.json()
@@ -105,6 +117,27 @@ const VersionsPage = () => {
       setDeletingActivityId(null)
     }
   }
+
+  // Поиск по дате (DD.MM.YYYY), автору, описанию
+  const filteredRecordItems = searchQuery.trim() === ''
+    ? recordItems
+    : recordItems.filter(({ activity, schoolName }) => {
+        const q = searchQuery.trim().toLowerCase()
+        const dateFormatted = formatRecordDate(activity.date || '')
+        const author = (activity.createdByName || activity.createdBy || '').toLowerCase()
+        const desc = (activity.description || '').toLowerCase()
+        const metricsStr = activity.metrics
+          ? Object.entries(activity.metrics).map(([k, v]) => `${k} ${v}`).join(' ').toLowerCase()
+          : ''
+        const school = schoolName.toLowerCase()
+        return (
+          dateFormatted.toLowerCase().includes(q) ||
+          author.includes(q) ||
+          desc.includes(q) ||
+          metricsStr.includes(q) ||
+          school.includes(q)
+        )
+      })
 
   // Удаление последних N резервных копий
   const handleDeleteLast = async (count: number) => {
@@ -201,7 +234,7 @@ const VersionsPage = () => {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">История записей</h1>
           <p className="text-gray-600 mt-2">
-            Внесения воронки и метрик без привязки к школе. Ниже — резервные копии данных.
+            Все внесения воронки и числовых метрик (по всем школам). Можно искать по дате, автору или тексту и удалять запись. Ниже — резервные копии данных.
           </p>
         </div>
 
@@ -216,24 +249,41 @@ const VersionsPage = () => {
           </div>
         )}
 
-        {/* Записи воронки и метрик (без школы) */}
+        {/* Записи воронки и метрик (по всем школам) */}
         <div className="bg-white rounded-lg shadow-md overflow-hidden mb-8">
-          <div className="px-6 py-4 bg-gray-100 border-b">
+          <div className="px-6 py-4 bg-gray-100 border-b flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-semibold text-gray-900">
-              Записи (воронка и метрики без школы) — {recordActivities.length}
+              Записи воронки и метрик — {recordItems.length}
+              {searchQuery.trim() && ` (найдено: ${filteredRecordItems.length})`}
             </h2>
+            <input
+              type="text"
+              placeholder="Поиск по дате, автору, школе, тексту..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm w-64 max-w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
           </div>
-          {recordActivities.length === 0 ? (
+          {recordItems.length === 0 ? (
             <div className="px-6 py-8 text-center text-gray-500">
-              Нет записей воронки или метрик без привязки к школе.
+              Нет записей воронки или числовых метрик.
+            </div>
+          ) : filteredRecordItems.length === 0 ? (
+            <div className="px-6 py-8 text-center text-gray-500">
+              По запросу «{searchQuery}» ничего не найдено. Измените поиск.
             </div>
           ) : (
             <ul className="divide-y divide-gray-200">
-              {recordActivities.map((activity) => (
-                <li key={activity.id} className="px-6 py-4 hover:bg-gray-50 flex items-start justify-between gap-4">
+              {filteredRecordItems.map(({ schoolId, schoolName, activity }) => (
+                <li key={`${schoolId}-${activity.id}`} className="px-6 py-4 hover:bg-gray-50 flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-gray-900">
                       {recordTypeLabel(activity.type)}
+                      {schoolName && (
+                        <span className="ml-2 text-gray-500 font-normal">
+                          — {schoolName}
+                        </span>
+                      )}
                     </p>
                     <p className="text-sm text-gray-600 mt-0.5">
                       {formatRecordDate(activity.date)}
@@ -252,7 +302,7 @@ const VersionsPage = () => {
                   {isAdmin && (
                     <button
                       type="button"
-                      onClick={() => handleDeleteActivity(activity.id)}
+                      onClick={() => handleDeleteActivity(schoolId, activity.id)}
                       disabled={deletingActivityId !== null}
                       className="shrink-0 px-3 py-1.5 text-sm font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 disabled:opacity-50"
                     >
@@ -364,7 +414,7 @@ const VersionsPage = () => {
         <div className="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
           <h3 className="font-medium text-yellow-800 mb-2">Как это работает:</h3>
           <ul className="text-sm text-yellow-700 space-y-1">
-            <li><strong>Записи</strong> — внесения воронки и метрик «без школы». Можно удалить конкретную запись кнопкой «Удалить».</li>
+            <li><strong>Записи</strong> — все внесения воронки и числовых метрик (в т.ч. с привязкой к школе). Используйте поиск, чтобы найти запись по дате (15.01.2026), автору (Пати) или тексту (контактов родителя). Удаление — кнопкой «Удалить».</li>
             <li><strong>Резервные копии</strong> — создаются при сохранении данных; хранятся последние 50 версий.</li>
             <li>Восстановление копии безопасно — текущие данные сохраняются в бэкап перед откатом.</li>
           </ul>

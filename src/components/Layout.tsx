@@ -18,6 +18,7 @@ const Layout = ({ children }: LayoutProps) => {
     { path: '/pipeline', label: 'Пайплайн' },
     { path: '/calendar', label: 'Календарь' },
     { path: '/schools', label: 'Школы' },
+    { path: '/photo-leads', label: 'Лиды по фото' },
     { path: '/versions', label: 'История записей', adminOnly: true },
   ]
 

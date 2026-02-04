@@ -16,10 +16,16 @@
     "test:e2e:headed": "playwright test --headed",
     "migrate:mongodb": "node scripts/migrate-to-mongodb.js",
     "migrate:mongodb:dry": "node scripts/migrate-to-mongodb.js --dry-run",
-    "migrate:mongodb:hash": "node scripts/migrate-to-mongodb.js --hash-passwords"
+    "migrate:mongodb:hash": "node scripts/migrate-to-mongodb.js --hash-passwords",
+    "import:complete-ultimate": "node scripts/import-complete-ultimate-schools.js",
+    "import:complete-ultimate:dry": "node scripts/import-complete-ultimate-schools.js --dry-run",
+    "sync:amo-stages": "node scripts/sync-amo-stages.js",
+    "sync:amo-stages:sandbox": "MODE=sandbox node scripts/sync-amo-stages.js",
+    "sync:amo-stages:dry": "node scripts/sync-amo-stages.js --dry-run"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "dotenv": "^16.3.1",
     "concurrently": "^9.2.1",
     "cors": "^2.8.6",
     "express": "^5.2.1",
