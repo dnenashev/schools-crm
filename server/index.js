@@ -450,7 +450,7 @@ app.put('/api/schools/:id', requireAuth, async (req, res) => {
     const keys = Object.keys(body);
 
     if (!isAdminUser) {
-      const ALLOWED_MANAGER_FIELDS = new Set(['callsLink']);
+      const ALLOWED_MANAGER_FIELDS = new Set(['callsLink', 'amoLink']);
       const forbidden = keys.filter(k => !ALLOWED_MANAGER_FIELDS.has(k));
       if (forbidden.length > 0) {
         return res.status(403).json({ error: 'Доступно только администраторам' });

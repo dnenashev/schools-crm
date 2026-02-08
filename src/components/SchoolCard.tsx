@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { School, Activity } from '../types/school'
 import { useApiUrl, authenticatedFetch } from '../config/api'
 import { useAuth } from './AuthProvider'
@@ -35,10 +35,16 @@ const SchoolCard = ({ school, onClose, onUpdate }: SchoolCardProps) => {
   const [notes, setNotes] = useState(school.notes || '')
   const [callbackDate, setCallbackDate] = useState(school.callbackDate || '')
   const [callsLink, setCallsLink] = useState(school.callsLink || '')
+  const [amoLink, setAmoLink] = useState(school.amoLink || '')
   const [savingCallsLink, setSavingCallsLink] = useState(false)
+  const [savingAmoLink, setSavingAmoLink] = useState(false)
   const [saving, setSaving] = useState(false)
   const API_URL = useApiUrl()
   const { isAdmin } = useAuth()
+
+  useEffect(() => {
+    setAmoLink(school.amoLink || '')
+  }, [school.id, school.amoLink])
 
   const normalizeUrl = (raw: string): string => {
     const v = raw.trim()
@@ -66,6 +72,28 @@ const SchoolCard = ({ school, onClose, onUpdate }: SchoolCardProps) => {
       alert('Ошибка сохранения')
     } finally {
       setSavingCallsLink(false)
+    }
+  }
+
+  const saveAmoLink = async () => {
+    setSavingAmoLink(true)
+    try {
+      const response = await authenticatedFetch(`${API_URL}/schools/${school.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ amoLink: amoLink.trim() })
+      })
+
+      if (response.ok) {
+        onUpdate()
+      } else {
+        const data = await response.json()
+        alert(data.error || 'Ошибка сохранения')
+      }
+    } catch (error) {
+      console.error('Error saving AMO link:', error)
+      alert('Ошибка сохранения')
+    } finally {
+      setSavingAmoLink(false)
     }
   }
 
@@ -260,8 +288,8 @@ const SchoolCard = ({ school, onClose, onUpdate }: SchoolCardProps) => {
                 <a href={school.website} target="_blank" rel="noopener noreferrer"
                    className="text-blue-600 hover:underline text-sm">Сайт</a>
               )}
-              {school.amoLink && (
-                <a href={school.amoLink} target="_blank" rel="noopener noreferrer"
+              {(school.amoLink || amoLink.trim()) && (
+                <a href={school.amoLink || normalizeUrl(amoLink)} target="_blank" rel="noopener noreferrer"
                    className="text-green-600 hover:underline text-sm">АМО CRM</a>
               )}
               {school.callsLink && (
@@ -273,6 +301,42 @@ const SchoolCard = ({ school, onClose, onUpdate }: SchoolCardProps) => {
                 >
                   Звонки
                 </a>
+              )}
+            </div>
+
+            {/* Ссылка на сделку АМО */}
+            <div className="mt-4">
+              <label className="block text-sm text-gray-600 mb-1">
+                Ссылка на сделку в АмоCRM
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={amoLink}
+                  onChange={(e) => setAmoLink(e.target.value)}
+                  placeholder="https://...amocrm.ru/leads/detail/..."
+                  className="flex-1 px-3 py-2 border rounded-lg text-sm"
+                />
+                <button
+                  onClick={saveAmoLink}
+                  disabled={savingAmoLink}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm disabled:opacity-50"
+                  title="Сохранить ссылку"
+                >
+                  {savingAmoLink ? '...' : 'Сохранить'}
+                </button>
+              </div>
+              {(amoLink.trim() || school.amoLink) && (
+                <div className="mt-2">
+                  <a
+                    href={normalizeUrl(amoLink || school.amoLink || '')}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-green-700 hover:underline"
+                  >
+                    Открыть сделку в АМО →
+                  </a>
+                </div>
               )}
             </div>
 

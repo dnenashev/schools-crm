@@ -288,6 +288,21 @@ const SchoolsTable = ({ schools, title, subtitle, onUpdate }: SchoolsTableProps)
                         >
                           Карточка
                         </button>
+                        {school.amoLink ? (
+                          <a
+                            href={school.amoLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex px-2 py-1 text-xs font-medium text-green-800 bg-green-100 hover:bg-green-200 rounded transition-colors"
+                            title="Открыть сделку в АмоCRM"
+                          >
+                            АМО
+                          </a>
+                        ) : (
+                          <span className="text-gray-400 text-xs" title="Ссылку можно добавить в карточке школы">
+                            — АМО
+                          </span>
+                        )}
                         {school.uchiLink && (
                           <a 
                             href={school.uchiLink} 
@@ -306,16 +321,6 @@ const SchoolsTable = ({ schools, title, subtitle, onUpdate }: SchoolsTableProps)
                             className="text-blue-600 hover:text-blue-800 text-xs"
                           >
                             Сайт
-                          </a>
-                        )}
-                        {school.amoLink && (
-                          <a 
-                            href={school.amoLink} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-green-600 hover:text-green-800 text-xs"
-                          >
-                            АМО
                           </a>
                         )}
                       </div>
