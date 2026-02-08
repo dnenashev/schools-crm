@@ -8,6 +8,8 @@ interface SchoolsTableProps {
   title: string
   subtitle?: string
   onUpdate?: () => void
+  /** Статистика привязки к Амо по всем школам: сколько с ссылкой, сколько без */
+  amoStats?: { linked: number; unlinked: number }
 }
 
 type SortField =
@@ -23,7 +25,7 @@ type SortField =
   | 'excursionPlannedDate'
 type SortDirection = 'asc' | 'desc'
 
-const SchoolsTable = ({ schools, title, subtitle, onUpdate }: SchoolsTableProps) => {
+const SchoolsTable = ({ schools, title, subtitle, onUpdate, amoStats }: SchoolsTableProps) => {
   const [search, setSearch] = useState('')
   const [sortField, setSortField] = useState<SortField>('name')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
@@ -175,6 +177,11 @@ const SchoolsTable = ({ schools, title, subtitle, onUpdate }: SchoolsTableProps)
         <h2 className="text-xl font-bold">{title}</h2>
         {subtitle && <p className="text-blue-100 text-sm mt-1">{subtitle}</p>}
         <p className="text-blue-200 text-sm mt-2">Найдено: {filteredAndSortedSchools.length} школ</p>
+        {amoStats != null && (
+          <p className="text-blue-200 text-sm mt-1">
+            Ссылка на Амо: <span className="font-medium text-white">{amoStats.linked}</span> с привязкой, <span className="font-medium text-blue-100">{amoStats.unlinked}</span> без привязки
+          </p>
+        )}
       </div>
 
       {/* Поиск */}

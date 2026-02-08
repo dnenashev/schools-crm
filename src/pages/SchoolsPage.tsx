@@ -147,6 +147,13 @@ const SchoolsPage = () => {
     return filteredSchools.some(isUnknownSchoolRecord)
   }, [filteredSchools])
 
+  // Статистика по привязке к Амо (по всем «обычным» школам, без неизвестных)
+  const amoStats = useMemo(() => {
+    const real = schools.filter(s => !isUnknownSchoolRecord(s))
+    const linked = real.filter(s => s.amoLink && String(s.amoLink).trim()).length
+    return { linked, unlinked: real.length - linked }
+  }, [schools])
+
   // Формируем заголовок и подзаголовок
   const { title, subtitle, filterDescription } = useMemo(() => {
     const formatDate = (dateStr: string) => {
@@ -262,6 +269,7 @@ const SchoolsPage = () => {
           title={title}
           subtitle={subtitle}
           onUpdate={refreshSchools}
+          amoStats={amoStats}
         />
       </div>
     </div>
